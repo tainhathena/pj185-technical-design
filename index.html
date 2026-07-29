@@ -1,0 +1,3064 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PJ185 — Proposal Technical Design v3.0 · NocoDB hub ⇄ Smartsheet ⇄ PIM</title>
+<meta name="description" content="Bản thiết kế kỹ thuật v3.0 cho hub dữ liệu NocoDB đối chiếu Smartsheet Product Intake Sheet với PIM: data model đầy đủ trường, quy tắc ghi dựa trên nội dung, engine đồng bộ, state store hub_sync, 10 ràng buộc đã verify và 12 quyết định cần ký." />
+<meta name="robots" content="noindex, nofollow" />
+<meta name="color-scheme" content="light dark" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6df6'/%3E%3Cpath d='M9 22V10h3.2l4.6 7.4V10H20v12h-3.2l-4.6-7.4V22z' fill='%23fff'/%3E%3C/svg%3E" />
+<style>/* PJ185 technical dossier — light-first, TOC rail + editorial content column.
+   Diagrams always sit on a light canvas so mermaid needs no re-render on theme change. */
+
+:root {
+  --bg: #f4f6f9;
+  --panel: #ffffff;
+  --panel-2: #fafbfd;
+  --ink: #131822;
+  --ink-soft: #475169;
+  --ink-faint: #6f7b91;
+  --line: #e2e7ef;
+  --line-strong: #cdd5e1;
+  --accent: #2f6df6;
+  --accent-ink: #1b4dc4;
+  --accent-soft: #eaf1ff;
+  --ok-bg: #e8f8ef;
+  --ok-line: #9fdfba;
+  --ok-ink: #14683c;
+  --warn-bg: #fff6e3;
+  --warn-line: #f0d492;
+  --warn-ink: #855100;
+  --open-bg: #f0edfe;
+  --open-line: #cbc0f5;
+  --open-ink: #4b34a8;
+  --code-bg: #eef1f6;
+  --code-ink: #a92a68;
+  --th-bg: #eef2f8;
+  --row-alt: #fafbfc;
+  --shadow-sm: 0 1px 2px rgba(15, 25, 45, 0.05);
+  --shadow-md: 0 1px 2px rgba(15, 25, 45, 0.05), 0 10px 28px rgba(15, 25, 45, 0.07);
+  --radius: 12px;
+  --radius-sm: 7px;
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 18px;
+  --s5: 28px;
+  --s6: 44px;
+  --s7: 72px;
+  --rail: 292px;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --panel: #151b23;
+    --panel-2: #1a212b;
+    --ink: #e7edf4;
+    --ink-soft: #b3bfcd;
+    --ink-faint: #8794a5;
+    --line: #242c38;
+    --line-strong: #333d4c;
+    --accent: #74a2ff;
+    --accent-ink: #a8c4ff;
+    --accent-soft: #16233c;
+    --ok-bg: #10261a;
+    --ok-line: #245c39;
+    --ok-ink: #7fd8a4;
+    --warn-bg: #2a2412;
+    --warn-line: #5b4c1d;
+    --warn-ink: #e6c477;
+    --open-bg: #1d1936;
+    --open-line: #3b3170;
+    --open-ink: #bdaeff;
+    --code-bg: #1f2630;
+    --code-ink: #ff9dcb;
+    --th-bg: #1b222c;
+    --row-alt: #161d26;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.35), 0 14px 34px rgba(0, 0, 0, 0.4);
+  }
+}
+
+:root[data-theme="light"] {
+  --bg: #f4f6f9; --panel: #fff; --panel-2: #fafbfd; --ink: #131822; --ink-soft: #475169;
+  --ink-faint: #6f7b91; --line: #e2e7ef; --line-strong: #cdd5e1; --accent: #2f6df6;
+  --accent-ink: #1b4dc4; --accent-soft: #eaf1ff; --ok-bg: #e8f8ef; --ok-line: #9fdfba;
+  --ok-ink: #14683c; --warn-bg: #fff6e3; --warn-line: #f0d492; --warn-ink: #855100;
+  --open-bg: #f0edfe; --open-line: #cbc0f5; --open-ink: #4b34a8; --code-bg: #eef1f6;
+  --code-ink: #a92a68; --th-bg: #eef2f8; --row-alt: #fafbfc;
+  --shadow-sm: 0 1px 2px rgba(15, 25, 45, 0.05);
+  --shadow-md: 0 1px 2px rgba(15, 25, 45, 0.05), 0 10px 28px rgba(15, 25, 45, 0.07);
+}
+
+:root[data-theme="dark"] {
+  --bg: #0d1117; --panel: #151b23; --panel-2: #1a212b; --ink: #e7edf4; --ink-soft: #b3bfcd;
+  --ink-faint: #8794a5; --line: #242c38; --line-strong: #333d4c; --accent: #74a2ff;
+  --accent-ink: #a8c4ff; --accent-soft: #16233c; --ok-bg: #10261a; --ok-line: #245c39;
+  --ok-ink: #7fd8a4; --warn-bg: #2a2412; --warn-line: #5b4c1d; --warn-ink: #e6c477;
+  --open-bg: #1d1936; --open-line: #3b3170; --open-ink: #bdaeff; --code-bg: #1f2630;
+  --code-ink: #ff9dcb; --th-bg: #1b222c; --row-alt: #161d26;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.35), 0 14px 34px rgba(0, 0, 0, 0.4);
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.68;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ------------------------------------------------------------- masthead */
+.masthead {
+  border-bottom: 1px solid var(--line);
+  background:
+    linear-gradient(180deg, var(--accent-soft), transparent 78%),
+    var(--panel);
+}
+.masthead-in {
+  max-width: 1260px;
+  margin: 0 auto;
+  padding: var(--s6) var(--s5) var(--s5);
+  display: grid;
+  gap: var(--s4);
+}
+.eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.eyebrow .sep { opacity: 0.4; }
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+  letter-spacing: 0.04em;
+}
+.doc-title {
+  margin: 0;
+  font-size: clamp(30px, 4.6vw, 52px);
+  line-height: 1.08;
+  letter-spacing: -0.022em;
+  font-weight: 700;
+  max-width: 22ch;
+}
+.standfirst {
+  margin: 0;
+  max-width: 68ch;
+  font-size: 17px;
+  color: var(--ink-soft);
+}
+.meta-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s5);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+  font-size: 13.5px;
+  color: var(--ink-faint);
+}
+.meta-strip b { color: var(--ink-soft); font-weight: 600; }
+
+.theme-toggle {
+  position: fixed;
+  top: 14px;
+  right: 16px;
+  z-index: 40;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--ink-soft);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  font-size: 16px;
+  line-height: 1;
+  transition: transform 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+.theme-toggle:hover { transform: scale(1.06); color: var(--accent); border-color: var(--accent); }
+.theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------------------------------------------------------------- shell */
+.shell {
+  max-width: 1260px;
+  margin: 0 auto;
+  padding: var(--s6) var(--s5) var(--s7);
+  display: grid;
+  grid-template-columns: var(--rail) minmax(0, 1fr);
+  gap: var(--s6);
+  align-items: start;
+}
+
+/* ------------------------------------------------------------------ toc */
+.toc {
+  position: sticky;
+  top: var(--s4);
+  max-height: calc(100vh - var(--s6));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: var(--s2);
+}
+.toc-head {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding: 0 0 var(--s3) var(--s3);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--s2);
+}
+.toc-item {
+  display: flex;
+  gap: var(--s2);
+  align-items: baseline;
+  padding: 5px var(--s2) 5px var(--s3);
+  border-left: 2px solid transparent;
+  color: var(--ink-soft);
+  text-decoration: none;
+  font-size: 13.5px;
+  line-height: 1.4;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.toc-item:hover { color: var(--accent); background: var(--accent-soft); }
+.toc-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.toc-item.is-active {
+  color: var(--accent-ink);
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+.toc-l2 { font-weight: 600; color: var(--ink); margin-top: var(--s2); }
+.toc-l3 { padding-left: var(--s5); font-size: 13px; }
+.toc-num {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+  min-width: 2.4em;
+  flex: none;
+}
+.toc-l2 .toc-num { color: var(--accent); }
+
+/* -------------------------------------------------------------- article */
+.doc {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: var(--s6) clamp(var(--s4), 3.4vw, 56px) var(--s7);
+  min-width: 0;
+}
+
+.doc > h2 {
+  margin: var(--s7) 0 var(--s4);
+  padding-top: var(--s4);
+  border-top: 2px solid var(--ink);
+  font-size: clamp(23px, 2.5vw, 30px);
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+}
+.doc > h2:first-child { margin-top: 0; }
+.doc > h3 {
+  margin: var(--s6) 0 var(--s3);
+  font-size: 18.5px;
+  line-height: 1.3;
+  letter-spacing: -0.008em;
+}
+.doc h4 { margin: var(--s5) 0 var(--s2); font-size: 15.5px; color: var(--ink-soft); }
+
+.h-anchored { position: relative; scroll-margin-top: var(--s4); }
+.h-num {
+  display: block;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  color: var(--accent);
+  margin-bottom: 2px;
+}
+.h-link { color: inherit; text-decoration: none; }
+.h-link:hover { color: var(--accent); }
+.h-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+
+.doc p { margin: 0 0 var(--s4); max-width: 78ch; }
+.doc ul, .doc ol { margin: 0 0 var(--s4); padding-left: var(--s5); max-width: 78ch; }
+.doc li { margin: var(--s1) 0; }
+.doc li > ul, .doc li > ol { margin: var(--s1) 0 var(--s2); }
+.doc hr { border: 0; border-top: 1px solid var(--line); margin: var(--s6) 0; }
+
+.doc a { color: var(--accent-ink); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+.doc a:hover { color: var(--accent); }
+
+.doc strong { font-weight: 650; color: var(--ink); }
+
+.doc blockquote {
+  margin: 0 0 var(--s4);
+  padding: var(--s3) var(--s4);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--panel-2);
+  color: var(--ink-soft);
+}
+.doc blockquote p:last-child { margin-bottom: 0; }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.87em;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  padding: 0.12em 0.36em;
+  border-radius: 5px;
+  overflow-wrap: break-word;
+}
+
+.code-wrap {
+  margin: 0 0 var(--s4);
+  overflow-x: auto;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.code-wrap pre { margin: 0; padding: var(--s4); }
+.code-wrap code {
+  background: none;
+  color: var(--ink);
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre;
+}
+
+/* --------------------------------------------------------------- tables */
+.table-wrap {
+  margin: 0 0 var(--s5);
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+}
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { padding: 8px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+th {
+  position: sticky;
+  top: 0;
+  background: var(--th-bg);
+  font-weight: 650;
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--line-strong);
+}
+tbody tr:nth-child(even) { background: var(--row-alt); }
+tbody tr:last-child td { border-bottom: 0; }
+td code, th code { font-size: 12px; }
+
+/* ------------------------------------------------------------- diagrams */
+.diagram {
+  margin: 0 0 var(--s5);
+  padding: var(--s4);
+  background: #ffffff;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  overflow-x: auto;
+}
+.diagram pre.mermaid {
+  margin: 0;
+  min-height: 40px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: #6f7b91;
+  white-space: pre;
+}
+.diagram pre.mermaid[data-processed] { color: inherit; }
+.diagram svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+
+/* ---------------------------------------------------------------- chips */
+.chip {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  font-size: 0.9em;
+  line-height: 1.5;
+}
+.chip-ok { background: var(--ok-bg); border-color: var(--ok-line); }
+.chip-warn { background: var(--warn-bg); border-color: var(--warn-line); }
+.chip-open { background: var(--open-bg); border-color: var(--open-line); }
+
+/* -------------------------------------------------------------- footer */
+.foot {
+  max-width: 1260px;
+  margin: 0 auto;
+  padding: 0 var(--s5) var(--s7);
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+.foot a { color: var(--accent-ink); }
+
+/* ------------------------------------------------------------ responsive */
+@media (max-width: 1040px) {
+  .shell { grid-template-columns: minmax(0, 1fr); gap: var(--s5); padding-top: var(--s5); }
+  .toc {
+    position: static;
+    max-height: none;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+    padding: var(--s3);
+  }
+  .toc-inner { max-height: 46vh; overflow-y: auto; }
+  .toc-head { padding-left: var(--s2); }
+  .doc { padding: var(--s5) var(--s4) var(--s6); }
+}
+
+@media (max-width: 620px) {
+  body { font-size: 15.5px; }
+  .masthead-in { padding: var(--s5) var(--s4) var(--s4); }
+  .shell { padding-left: var(--s3); padding-right: var(--s3); }
+  .foot { padding-left: var(--s3); padding-right: var(--s3); }
+  .doc { padding: var(--s4) var(--s3) var(--s5); border-radius: var(--radius-sm); }
+  .toc-l3 { padding-left: var(--s4); }
+}
+
+/* ------------------------------------------------------------------ print */
+@media print {
+  :root { --bg: #fff; --panel: #fff; --shadow-md: none; --shadow-sm: none; }
+  .toc, .theme-toggle { display: none; }
+  .shell { display: block; padding: 0; max-width: none; }
+  .doc { border: 0; padding: 0; box-shadow: none; }
+  .doc > h2 { page-break-after: avoid; }
+  .diagram, .table-wrap, .code-wrap { page-break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" id="themeToggle" type="button" aria-label="Đổi sáng/tối" title="Đổi sáng/tối">◐</button>
+
+<header class="masthead">
+  <div class="masthead-in">
+    <div class="eyebrow">
+      <span class="badge">v3.0</span>
+      <span>PJ185</span><span class="sep">/</span>
+      <span>Proposal Technical Design</span><span class="sep">/</span>
+      <span>2026-07-29</span>
+    </div>
+    <h1 class="doc-title">Hub dữ liệu NocoDB cho Smartsheet ⇄ PIM</h1>
+    <p class="standfirst">
+      Thiết kế kỹ thuật cho một hub trung tâm trên NocoDB: hợp nhất
+      <b>Product Intake Sheet</b> (Smartsheet, 105 dòng · 44 cột) với <b>PIM</b>
+      (390 dòng app · 272 product · 17 cột), giữ nguyên Smartsheet vì quyền chỉ ở mức
+      EDITOR, và chỉ ghi ngược khi ô đích thật sự trống. Mọi số trong tài liệu là
+      <b>số đo trên dữ liệu thật</b>, không phải giả định từ định nghĩa cột.
+    </p>
+    <div class="meta-strip">
+      <span><b>Trạng thái:</b> bản nháp để review</span>
+      <span><b>Thay thế:</b> v1.0 và v2.0</span>
+      <span><b>Chờ ký:</b> 12 quyết định D-01→D-12</span>
+      <span><b>Tài liệu anh em:</b> Data Exceptions Register</span>
+    </div>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="toc" aria-label="Mục lục">
+    <div class="toc-head">Mục lục</div>
+    <div class="toc-inner">
+<a class="toc-item toc-l2" href="#sec-1"><span class="toc-num">1</span><span class="toc-text">Phạm vi bản thiết kế</span></a>
+<a class="toc-item toc-l3" href="#sec-1-1"><span class="toc-num">1.1</span><span class="toc-text">Trong phạm vi</span></a>
+<a class="toc-item toc-l3" href="#sec-1-2"><span class="toc-num">1.2</span><span class="toc-text">Ngoài phạm vi giai đoạn này</span></a>
+<a class="toc-item toc-l3" href="#sec-1-3"><span class="toc-num">1.3</span><span class="toc-text">Bảng Signals — nêu rõ để không ai kỳ vọng sai</span></a>
+<a class="toc-item toc-l2" href="#sec-2"><span class="toc-num">2</span><span class="toc-text">Nền bằng chứng</span></a>
+<a class="toc-item toc-l3" href="#sec-2-1"><span class="toc-num">2.1</span><span class="toc-text">Bức tranh định lượng</span></a>
+<a class="toc-item toc-l3" href="#sec-2-2"><span class="toc-num">2.2</span><span class="toc-text">Từ vựng thật hai bên (✅ đo trên dữ liệu, không lấy từ định nghĩa cột)</span></a>
+<a class="toc-item toc-l2" href="#sec-3"><span class="toc-num">3</span><span class="toc-text">Bảy nguyên tắc thiết kế</span></a>
+<a class="toc-item toc-l2" href="#sec-4"><span class="toc-num">4</span><span class="toc-text">Kiến trúc tổng thể</span></a>
+<a class="toc-item toc-l3" href="#sec-4-1"><span class="toc-num">4.1</span><span class="toc-text">Ba hệ thống và vai trò</span></a>
+<a class="toc-item toc-l3" href="#sec-4-2"><span class="toc-num">4.2</span><span class="toc-text">Danh sách bảng và lý do đặt tên</span></a>
+<a class="toc-item toc-l2" href="#sec-5"><span class="toc-num">5</span><span class="toc-text">Data model</span></a>
+<a class="toc-item toc-l3" href="#sec-5-1"><span class="toc-num">5.1</span><span class="toc-text">Quy ước</span></a>
+<a class="toc-item toc-l3" href="#sec-5-2"><span class="toc-num">5.2</span><span class="toc-text">Bảng Products — đặc tả đầy đủ</span></a>
+<a class="toc-item toc-l3" href="#sec-5-3"><span class="toc-num">5.3</span><span class="toc-text">Bảng Apps</span></a>
+<a class="toc-item toc-l3" href="#sec-5-4"><span class="toc-num">5.4</span><span class="toc-text">Teams và Groups</span></a>
+<a class="toc-item toc-l3" href="#sec-5-5"><span class="toc-num">5.5</span><span class="toc-text">Định danh: một khoá, nhiều tên</span></a>
+<a class="toc-item toc-l3" href="#sec-5-6"><span class="toc-num">5.6</span><span class="toc-text">ERD đầy đủ trường</span></a>
+<a class="toc-item toc-l3" href="#sec-5-7"><span class="toc-num">5.7</span><span class="toc-text">Bản đồ chuyển kiểu cột</span></a>
+<a class="toc-item toc-l2" href="#sec-6"><span class="toc-num">6</span><span class="toc-text">Quyền sở hữu và quy tắc ghi</span></a>
+<a class="toc-item toc-l3" href="#sec-6-1"><span class="toc-num">6.1</span><span class="toc-text">Ma trận: chỉ 9/44 field có khả năng lệch</span></a>
+<a class="toc-item toc-l3" href="#sec-6-2"><span class="toc-num">6.2</span><span class="toc-text">Quy tắc ghi an toàn (thay cho ma trận ownership thô)</span></a>
+<a class="toc-item toc-l3" href="#sec-6-3"><span class="toc-num">6.3</span><span class="toc-text">Xung đột không phải là xung đột</span></a>
+<a class="toc-item toc-l2" href="#sec-7"><span class="toc-num">7</span><span class="toc-text">Kiến trúc engine đồng bộ</span></a>
+<a class="toc-item toc-l3" href="#sec-7-1"><span class="toc-num">7.1</span><span class="toc-text">Vị trí trong fork</span></a>
+<a class="toc-item toc-l3" href="#sec-7-2"><span class="toc-num">7.2</span><span class="toc-text">State store — schema Postgres riêng hubsync</span></a>
+<a class="toc-item toc-l3" href="#sec-7-3"><span class="toc-num">7.3</span><span class="toc-text">Luồng Smartsheet → hub</span></a>
+<a class="toc-item toc-l3" href="#sec-7-4"><span class="toc-num">7.4</span><span class="toc-text">Luồng hub → Smartsheet</span></a>
+<a class="toc-item toc-l3" href="#sec-7-5"><span class="toc-num">7.5</span><span class="toc-text">Luồng PIM</span></a>
+<a class="toc-item toc-l3" href="#sec-7-6"><span class="toc-num">7.6</span><span class="toc-text">Chống vòng lặp echo — bắt buộc, không phải tuỳ chọn</span></a>
+<a class="toc-item toc-l3" href="#sec-7-7"><span class="toc-num">7.7</span><span class="toc-text">Deployment view</span></a>
+<a class="toc-item toc-l2" href="#sec-8"><span class="toc-num">8</span><span class="toc-text">Ràng buộc cứng đã verify</span></a>
+<a class="toc-item toc-l2" href="#sec-9"><span class="toc-num">9</span><span class="toc-text">Cổng chất lượng dữ liệu</span></a>
+<a class="toc-item toc-l2" href="#sec-10"><span class="toc-num">10</span><span class="toc-text">Quyết định cần ký</span></a>
+<a class="toc-item toc-l2" href="#sec-11"><span class="toc-num">11</span><span class="toc-text">Lộ trình theo milestone charter</span></a>
+<a class="toc-item toc-l3" href="#sec-11-1"><span class="toc-num">11.1</span><span class="toc-text">Pipeline khởi tạo lần đầu</span></a>
+<a class="toc-item toc-l3" href="#sec-11-2"><span class="toc-num">11.2</span><span class="toc-text">Máy trạng thái chiều đồng bộ</span></a>
+<a class="toc-item toc-l2" href="#sec-12"><span class="toc-num">12</span><span class="toc-text">Kế hoạch kiểm thử</span></a>
+<a class="toc-item toc-l2" href="#sec-13"><span class="toc-num">13</span><span class="toc-text">Rủi ro bổ sung so với charter §13</span></a>
+<a class="toc-item toc-l2" href="#sec-pl-a"><span class="toc-num">PL A</span><span class="toc-text">44 cột Smartsheet, fill-rate đo trên 105 dòng</span></a>
+<a class="toc-item toc-l2" href="#sec-pl-b"><span class="toc-num">PL B</span><span class="toc-text">17 cột PIM export, fill-rate trên 390 dòng app</span></a>
+<a class="toc-item toc-l2" href="#sec-pl-c"><span class="toc-num">PL C</span><span class="toc-text">Diagram cũ: cái nào dùng lại, cái nào sửa, cái nào loại</span></a>
+    </div>
+  </nav>
+
+  <article class="doc">
+<h1 class="doc-title">PJ185 — Proposal Technical Design v3.0</h1>
+<p><strong>Dự án:</strong> NocoDB Central Data Hub — đồng bộ Product giữa PIM, Smartsheet và NocoDB
+<strong>Ngày:</strong> 2026-07-29
+<strong>Người soạn:</strong> Tài (Dev Platform / Technical Owner)
+<strong>Người cần duyệt:</strong> Thảo Lê (CTO) · Minh Lê (Head of PMO) · Quyen (PM)
+<strong>Tài liệu nghiệp vụ:</strong> <code>PJ185_Charter_v2.0.md</code> — doc này <strong>không</strong> nhắc lại nghiệp vụ, chỉ giải quyết phần kỹ thuật.
+<strong>Phụ lục dữ liệu:</strong> <code>PJ185_Data_Exceptions_Register.md</code> — danh sách ngoại lệ cần PM/CTO quyết.</p>
+<blockquote>
+<p><strong>Bản này viết lại hoàn toàn, thay thế <code>PJ185_Technical_Design_v1.0.md</code> và <code>v2.0.md</code>.</strong>
+Lý do: hai bản trước được soạn từ tài liệu cũ cộng suy luận, dẫn tới sai mô hình dữ liệu. Bản v3.0 dựng lại từ <strong>probe trực tiếp ba hệ thống ngày 2026-07-29</strong>; mọi khẳng định đều gắn nhãn nguồn.</p>
+</blockquote>
+<p><strong>Ký hiệu nhãn dùng suốt tài liệu:</strong></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Nhãn</th>
+<th>Nghĩa</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span></td>
+<td>Đã kiểm trực tiếp, có bằng chứng đo được (ghi rõ nguồn)</td>
+</tr>
+<tr>
+<td><span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span></td>
+<td>Suy luận có căn cứ nhưng <strong>chưa</strong> được người có thẩm quyền xác nhận</td>
+</tr>
+<tr>
+<td><span class="chip chip-open" title="chưa kiểm chứng">❓</span></td>
+<td>Chưa có bằng chứng — chỉ nằm ở mục quyết định, <strong>không</strong> được dùng làm tiền đề thiết kế</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="sec-1" class="h-anchored"><span class="h-num">1</span><a class="h-link" href="#sec-1">Phạm vi bản thiết kế</a></h2>
+<h3 id="sec-1-1" class="h-anchored"><span class="h-num">1.1</span><a class="h-link" href="#sec-1-1">Trong phạm vi</a></h3>
+<ul>
+<li>Thực thể <strong>Product</strong> (<code>PD###</code>) — sản phẩm game phát hành ra bên ngoài.</li>
+<li>Ba hệ thống: <strong>PIM</strong> (nguồn định danh + dữ liệu app/store), <strong>Smartsheet Product Intake Sheet</strong> (governance, timeline, phê duyệt), <strong>NocoDB</strong> (hub trung tâm).</li>
+<li>Data model của hub, ma trận quyền sở hữu từng field, kiến trúc engine đồng bộ, cổng chất lượng dữ liệu.</li>
+</ul>
+<h3 id="sec-1-2" class="h-anchored"><span class="h-num">1.2</span><a class="h-link" href="#sec-1-2">Ngoài phạm vi giai đoạn này</a></h3>
+<ul>
+<li>Thực thể <strong>Project</strong> (<code>PJ###</code>) — dự án nội bộ, chỉ tồn tại trên Project Intake Sheet, <strong>không có trong PIM</strong>. Tên bảng đã chừa chỗ (§4.2) nhưng không build.</li>
+<li>Task management và 60 sheet tracking con (charter §7.2).</li>
+<li>Gantt, row coloring, advanced tracking (charter §7.2 và R-012).</li>
+</ul>
+<blockquote>
+<p><span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> <strong>Lưu ý về nhánh code hiện tại:</strong> repo đang ở nhánh <code>feat/date-dependency-engine</code> với các commit Gantt và date-dependency. Charter §7.2 xếp những tính năng đó <strong>ngoài</strong> phạm vi, và R-012 yêu cầu CTO duyệt trước khi patch Community Edition. Công việc trong doc này <strong>không</strong> phụ thuộc nhánh đó và nên phát triển trên nhánh riêng tách từ <code>develop</code>.</p>
+</blockquote>
+<h3 id="sec-1-3" class="h-anchored"><span class="h-num">1.3</span><a class="h-link" href="#sec-1-3">Bảng <code>Signals</code> — nêu rõ để không ai kỳ vọng sai</a></h3>
+<p>Charter §8 đặt &quot;game signal data model&quot; là deliverable ngang hàng với project data. <span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Đo thật trên Smartsheet: <code>Signal PIC</code> <strong>0/105</strong> dòng có giá trị, <code>Signal Validation Proof</code> <strong>0/105</strong>, <code>SignalCode</code> chỉ <strong>4</strong> giá trị. ⇒ <strong>Hiện không có nền dữ liệu signal nào bên Smartsheet.</strong> Doc này model đủ ba field đó trên <code>Products</code> (theo quyết định D-07) nhưng <strong>không</strong> thiết kế thực thể <code>Signals</code>; việc đó cần Signal Team cung cấp nguồn thật.</p>
+<hr>
+<h2 id="sec-2" class="h-anchored"><span class="h-num">2</span><a class="h-link" href="#sec-2">Nền bằng chứng</a></h2>
+<p>Toàn bộ số liệu trong doc lấy từ ba lần probe dưới đây. Không con số nào được kế thừa từ tài liệu cũ.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Nguồn</th>
+<th>Cách lấy</th>
+<th>Quy mô</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>P1</td>
+<td>Smartsheet <code>Product Intake Sheet</code></td>
+<td>MCP <code>get_columns</code> + <code>get_sheet_summary</code> lấy <strong>đủ 44 cột × 105 dòng</strong>, <code>isSampled: false</code></td>
+<td>id <code>8904384021745540</code>, path <code>/GOV-PMO/</code>, <a href="https://app.smartsheet.com/sheets/WxQHhH4WCgVppgjhj95722QpXM9fcGX88VvmCq61">permalink</a></td>
+</tr>
+<tr>
+<td>P2</td>
+<td>PIM export (Google Sheet <code>app_info_export</code>)</td>
+<td><code>download_file_content</code> dạng <strong>xlsx</strong> rồi tự parse</td>
+<td>id <code>1uJrg5IckK6YlVpGLwyUkDS7Vbs8XDBGeLzgpoQP5z_0</code>, chủ hoangn@, 1 tab, 17 cột, <strong>390 dòng app / 272 product</strong></td>
+</tr>
+<tr>
+<td>P3</td>
+<td>Fork NocoDB</td>
+<td>đọc trực tiếp <code>packages/nocodb</code></td>
+<td><code>@nestjs/bull</code> ^10.2.3 + <code>bull</code> ^4.16.5; <code>modules/jobs/</code> có <code>fallback/</code> và <code>redis/</code></td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> <strong>Bẫy công cụ phải tránh khi lặp lại phép đo:</strong> với Google Sheet lớn, tuyệt đối <strong>không</strong> dùng <code>read_file_content</code> — nó cắt file mà không báo (từng trả 145/390 dòng, làm sai toàn bộ số liệu của một bản đo trước). Phải <code>download_file_content</code> với <code>exportMimeType</code> xlsx rồi parse.</p>
+</blockquote>
+<h3 id="sec-2-1" class="h-anchored"><span class="h-num">2.1</span><a class="h-link" href="#sec-2-1">Bức tranh định lượng</a></h3>
+<div class="code-wrap"><pre><code>Smartsheet: 105 dòng
+  ├─ 99 dòng có Product Alias
+  │    └─ 95 alias phân biệt  (⇒ 4 cặp TRÙNG alias)
+  │         ├─ 92 alias có mặt ở cả PIM   ← vùng có thể lệch
+  │         └─  3 alias chỉ có ở Smartsheet: PD325, PD376, PD379
+  └─  6 dòng KHÔNG có alias (gồm 1 dòng tiêu đề bị paste thành dữ liệu)
+
+PIM: 390 dòng app → 272 product  (1 product có 1–2 dòng: android / ios)
+  └─ 180 product chưa xuất hiện trên Smartsheet</code></pre></div>
+<h3 id="sec-2-2" class="h-anchored"><span class="h-num">2.2</span><a class="h-link" href="#sec-2-2">Từ vựng thật hai bên (<span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> đo trên dữ liệu, không lấy từ định nghĩa cột)</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Khái niệm</th>
+<th>PIM</th>
+<th>Smartsheet</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Team</td>
+<td><strong>23</strong> giá trị (Mainbase 83, Starship - I 52, The One - I 27, Seeker 26, Partner - I 23, Delta - I 16… + rác <code>0.375</code>)</td>
+<td><strong>13</strong> option (StarShip, Mainbase, Delta, Publishing, Hitscale, Funtom, Playard, Jurrac, Novabound, Joycraft, TrippleQ, 9AM, KTS) — dữ liệu còn có 3 giá trị <strong>ngoài</strong> option: <code>OutsourceDev</code>, <code>G3 Studio</code>, <code>Praha</code></td>
+</tr>
+<tr>
+<td>Group</td>
+<td><strong>11</strong> giá trị (Athena 119, Joy Planet 50, The One 27, Thynkout 23, Replay 23, Saola 13, Goty 13, C3, Yomi, Hienle, Praha)</td>
+<td><strong>5</strong> option (Athena, Joy Planet, Replay, <strong>TheOne</strong>, Others) — dữ liệu có <code>Joyplanet</code> sai chính tả</td>
+</tr>
+<tr>
+<td>Stage</td>
+<td><strong>7</strong> giá trị đơn trị ở <strong>cấp app</strong> (killed 131, production 95, market_test 33, sunset 25, published 15, product_test 9, soft_launch 1)</td>
+<td><strong>5</strong> option <strong>multi-select</strong> (Production, Market Test, Product Test, Soft Launch, Publish) — <strong>không có killed/sunset</strong></td>
+</tr>
+<tr>
+<td>Genre</td>
+<td><strong>27</strong> giá trị kiểu store, dạng ghép (<code>&quot;Puzzle, Match Merge&quot;</code>, <code>&quot;Action, Fighting&quot;</code>)</td>
+<td><code>Game Genre</code> <strong>3</strong> option (Puzzle, Arcade, <code>Stategy</code> — typo) + <code>Sub-genre</code> 3 option nhưng <strong>6/7 giá trị đang dùng đều ngoài option</strong></td>
+</tr>
+</tbody></table></div>
+<p><strong>Đây là phát hiện nền tảng:</strong> hai hệ <strong>không</strong> dùng chung bộ từ vựng, và độ mịn khác nhau. Mọi thiết kế coi hai bên là &quot;cùng một enum bị lệch chính tả&quot; đều sai.</p>
+<hr>
+<h2 id="sec-3" class="h-anchored"><span class="h-num">3</span><a class="h-link" href="#sec-3">Bảy nguyên tắc thiết kế</a></h2>
+<p>Các nguyên tắc này do PM/Technical Owner chốt trong buổi rà soát 2026-07-29, và mỗi nguyên tắc đều xuất phát từ một bằng chứng cụ thể, không phải quy tắc chung.</p>
+<p><strong>N1 — Hub là siêu tập, Smartsheet để nguyên.</strong>
+<span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Bằng chứng: account tích hợp chỉ có <code>accessLevel: EDITOR</code>; đổi option picklist cần ADMIN. Vì vậy hub giữ <strong>đầy đủ</strong> từ vựng của PIM (23 team, 11 group, 27 genre), còn khi đẩy sang Smartsheet thì <strong>chỉ ghi giá trị Smartsheet biểu diễn được</strong>; giá trị nào không có option thì <strong>không ghi</strong> và đánh dấu <code>hub_only</code>. Tuyệt đối không dồn vào <code>Others</code> — dồn là mất thông tin không hồi phục được. Hệ quả tốt: <strong>không cần xin quyền ADMIN ở phase 1.</strong></p>
+<p><strong>N2 — Model đủ trước, lược sau.</strong>
+Kể cả cột hiện rỗng hoàn toàn vẫn đưa vào data model, kèm cột fill-rate đã đo (§5.2) để sau này lược bỏ có căn cứ. Không tự cắt vì &quot;hiện không có dữ liệu&quot;.</p>
+<p><strong>N3 — Không ghi được ≠ ngoài phạm vi.</strong>
+<span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> <code>Athena Product Code</code> bị lock nên không ghi được, nhưng vẫn <strong>đọc</strong>, vẫn dùng để <strong>đối chiếu</strong>, vẫn <strong>báo lệch</strong> trong hub. Chỉ chiều ghi bị chặn.</p>
+<p><strong>N4 — Tên bảng là thực thể nghiệp vụ, không mang tên hệ nguồn.</strong>
+Không có <code>SmartsheetProducts</code>, không có <code>PimApps</code>. Nguồn gốc là <strong>dữ liệu</strong> trong state store, không phải tên bảng. Thêm hệ thứ ba (Signal Sense) là thêm dòng cấu hình, không phải rename bảng.</p>
+<p><strong>N5 — Quy tắc ghi dựa trên nội dung ô đích, không dựa trên &quot;ai là chủ&quot;.</strong>
+<span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Bằng chứng: nếu áp máy móc &quot;PIM là chủ <code>product_name</code>&quot; thì <strong>10 dòng bị ghi đè thành tên tệ hơn</strong> (§6.2). Quy tắc thay thế: <strong>chỉ ghi khi ô đích rỗng hoặc là placeholder</strong>; không bao giờ ghi đè một tên thật bằng một placeholder.</p>
+<p><strong>N6 — Ngoại lệ ra file, không nhét vào code.</strong>
+Mọi dòng bất thường đi vào <code>dead_letter</code> + view &quot;Cần xử lý&quot;, và được liệt kê trong Exceptions Register để PMO dọn <strong>trước</strong> khi bật sync. Mục tiêu là engine không có nhánh <code>if</code> cho từng case đặc biệt.</p>
+<p><strong>N7 — Mọi enum, quan hệ, ràng buộc trong doc phải có kết quả probe đứng sau,</strong> hoặc bị gắn nhãn <span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span>/<span class="chip chip-open" title="chưa kiểm chứng">❓</span>. Nguyên tắc thiết kế chỉ dùng để <em>giải thích</em> quyết định đã có bằng chứng, không dùng để <em>sinh ra</em> quyết định.</p>
+<hr>
+<h2 id="sec-4" class="h-anchored"><span class="h-num">4</span><a class="h-link" href="#sec-4">Kiến trúc tổng thể</a></h2>
+<h3 id="sec-4-1" class="h-anchored"><span class="h-num">4.1</span><a class="h-link" href="#sec-4-1">Ba hệ thống và vai trò</a></h3>
+<figure class="diagram"><pre class="mermaid">flowchart LR
+  PIM[("PIM&lt;br/&gt;product + app registry&lt;br/&gt;272 product / 390 app")]
+  SS[("Smartsheet&lt;br/&gt;Product Intake Sheet&lt;br/&gt;44 cột / 105 dòng")]
+  HUB[["NocoDB Hub — SSOT&lt;br/&gt;Postgres @ Neon, self-host GCP"]]
+  SAT[("~60 sheet tracking con&lt;br/&gt;ngoài phạm vi")]
+
+  PIM -- "một chiều: định danh, app, store" --&gt; HUB
+  HUB -- "outbox: xin alias cho product mới" --&gt; PIM
+  SS  -- "hai chiều: governance, timeline, status" --&gt; HUB
+  HUB -- "chỉ ghi field SS biểu diễn được" --&gt; SS
+  SS  -.-&gt; SAT</pre></figure>
+<p>Bảng phân vai đã được đối chiếu với charter §5.2 và với những gì đo được:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Hệ</th>
+<th>Vai trò thật (đã kiểm)</th>
+<th>Ghi chú so với charter</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>PIM</td>
+<td>Cấp <code>alias</code>, giữ <code>product_code</code>, <code>product_name</code>, <code>product_team</code>, <code>product_group</code>, và <strong>toàn bộ dữ liệu cấp app</strong> (platform, app_id, package_name, store_url, icon, stage, kick_off_date)</td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Charter §5.3 nói PIM cấp alias — khớp thực tế: PD224–PD379 đều có trong PIM. <span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> Charter nói PIM sở hữu &quot;UA-related fields&quot; nhưng export 17 cột <strong>không có</strong> field UA nào ⇒ cần xác nhận (D-09)</td>
+</tr>
+<tr>
+<td>Smartsheet</td>
+<td>Governance: phê duyệt, timeline, chi phí, người phụ trách, trạng thái vận hành</td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Khớp</td>
+</tr>
+<tr>
+<td>NocoDB</td>
+<td>Hub trung tâm, nơi <strong>duy nhất</strong> enforce được ràng buộc</td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> <code>Product Alias</code> bên SS không locked, không validation ⇒ SS không tự enforce unique được</td>
+</tr>
+</tbody></table></div>
+<h3 id="sec-4-2" class="h-anchored"><span class="h-num">4.2</span><a class="h-link" href="#sec-4-2">Danh sách bảng và lý do đặt tên</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Bảng</th>
+<th>Trạng thái</th>
+<th>1 dòng =</th>
+<th>Vì sao tên này</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong><code>Products</code></strong></td>
+<td>Build ngay</td>
+<td>1 product (<code>PD###</code>)</td>
+<td>Theo từ vựng PIM — hệ sở hữu định danh. <strong>Bẫy tên:</strong> Product Intake Sheet có nhiều cột đặt tên <code>Project *</code> (Project Manager, Project Approval Status, Project Duration, Project Cost, Project Type, Project Budgeting File); đó chỉ là tên cột nguồn, thực thể vẫn là Product</td>
+</tr>
+<tr>
+<td><strong><code>Apps</code></strong></td>
+<td>Build ngay</td>
+<td>1 (product × platform)</td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Bắt buộc phải có: 37 product khai <code>stage</code> khác nhau giữa android và ios. Nếu không tách bảng, hai dòng platform ghi đè nhau và mất dữ liệu thật</td>
+</tr>
+<tr>
+<td><strong><code>Teams</code></strong></td>
+<td>Build ngay</td>
+<td>1 team</td>
+<td>Bảng tham chiếu; vocab PIM là canonical + cột <code>ss_label</code> để dịch sang Smartsheet</td>
+</tr>
+<tr>
+<td><strong><code>Groups</code></strong></td>
+<td>Build ngay</td>
+<td>1 group</td>
+<td>Tương tự. <span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> <strong><code>Groups</code> KHÔNG phải cha của <code>Teams</code></strong> — đã đo: 5/23 team thuộc nhiều group (<code>Starship - I</code> → {Athena, Goty, Joy Planet, Saola}), nên chuỗi lookup 2 cấp là sai</td>
+</tr>
+<tr>
+<td><code>Projects</code></td>
+<td><strong>Chừa chỗ, không build</strong></td>
+<td>1 project nội bộ (<code>PJ###</code>)</td>
+<td>Ngang hàng <code>Products</code>, <strong>không</strong> có khoá ngoại nối hai bảng. Khi làm chỉ cần thêm một dòng <code>sync_pair</code>, không sửa engine</td>
+</tr>
+<tr>
+<td><code>Signals</code></td>
+<td><strong>Chưa thiết kế</strong></td>
+<td>—</td>
+<td>Xem §1.3</td>
+</tr>
+</tbody></table></div>
+<p>Sơ đồ quan hệ ở mức tổng quan (bản đầy đủ trường ở <strong>§5.6</strong>):</p>
+<figure class="diagram"><pre class="mermaid">erDiagram
+  GROUPS   ||--o{ PRODUCTS : "product_group · link ĐỘC LẬP"
+  TEAMS    ||--o{ PRODUCTS : "product_team · link ĐỘC LẬP"
+  PRODUCTS ||--o{ APPS     : "1 product – 1..2 app"
+
+  PRODUCTS {
+    text product_alias PK "PD### · khoá nối duy nhất"
+    text product_code "PIM sở hữu · SS locked ⇒ chỉ đọc"
+    text product_name "PIM sở hữu"
+    text game_name "SS primary · trùng product_code ở 51/105 dòng"
+  }
+  APPS {
+    text product_alias FK "→ PRODUCTS"
+    select app_platform "android / ios"
+    select stage "CẤP APP · 7 giá trị"
+    text package_name "tie-breaker định danh"
+  }
+  TEAMS {
+    text name PK "vocab PIM · 23 giá trị"
+    text ss_label "NULL nếu Smartsheet không có nhãn"
+  }
+  GROUPS {
+    text name PK "vocab PIM · 11 giá trị"
+    text ss_label "Smartsheet chỉ có 5 option"
+  }</pre></figure>
+<p><strong>Hai điều cố ý KHÔNG có trong sơ đồ này</strong>, vì tài liệu diagram cũ (<code>research/2026-07-15-sync-architecture-diagrams.md</code>) vẽ sai đúng hai chỗ đó:</p>
+<ol>
+<li><strong>Không có quan hệ <code>Groups → Teams</code>.</strong> <span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Đã đo: 5/23 team thuộc nhiều group (<code>Starship - I</code> → {Athena, Goty, Joy Planet, Saola}; <code>Publishing</code> → {Goty, Joy Planet, Saola}). Group <strong>không</strong> phải cha của team.</li>
+<li><strong><code>product_group</code> không phải lookup 2 cấp</strong> (<code>Products → Teams → Groups</code>) mà là <strong>link độc lập</strong> trên <code>Products</code>. Hệ quả của điểm 1 — nếu derive thì <code>PD103</code> sẽ ra group sai.</li>
+</ol>
+<p>Xem thêm Phụ lục C về các diagram cũ đã loại và lý do.</p>
+<hr>
+<h2 id="sec-5" class="h-anchored"><span class="h-num">5</span><a class="h-link" href="#sec-5">Data model</a></h2>
+<h3 id="sec-5-1" class="h-anchored"><span class="h-num">5.1</span><a class="h-link" href="#sec-5-1">Quy ước</a></h3>
+<ul>
+<li>Tên cột <strong>snake_case</strong> (theo PIM — hệ duy nhất có database thật, và phù hợp Postgres). Nhãn hiển thị trong NocoDB để riêng.</li>
+<li>Tiền tố <code>ss_</code> cho các field chỉ mang ý nghĩa vận hành phía Smartsheet (<code>ss_row_id</code>, <code>ss_modified_at</code>).</li>
+<li>Mọi ID của Smartsheet lưu dạng <strong>TEXT</strong>, không phải number. <span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Lý do: Smartsheet trả về dạng float có <code>.0</code> (<code>&quot;8090089767784324.0&quot;</code>) và ID 16 chữ số đang tiến sát giới hạn số nguyên chính xác của double (2^53 ≈ 9,007e15). Cùng lỗi này đã thấy ở <code>Athena Product Code</code> = <code>&quot;379.0&quot;</code>.</li>
+</ul>
+<h3 id="sec-5-2" class="h-anchored"><span class="h-num">5.2</span><a class="h-link" href="#sec-5-2">Bảng <code>Products</code> — đặc tả đầy đủ</a></h3>
+<p>Cột <strong>Fill</strong> = số dòng có giá trị trên 105 dòng Smartsheet (<span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> đo 2026-07-29). Cột <strong>Ghi</strong> = chiều ghi từ hub sang Smartsheet.</p>
+<h4 id="nhom-dinh-danh" class="h-anchored"><a class="h-link" href="#nhom-dinh-danh">Nhóm định danh</a></h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Hub column</th>
+<th>Nguồn</th>
+<th>Kiểu</th>
+<th>Fill</th>
+<th>Chủ</th>
+<th>Ghi</th>
+<th>Ghi chú</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>product_alias</code></td>
+<td>SS <code>Product Alias</code> / PIM <code>alias</code></td>
+<td>text, <strong>UNIQUE</strong></td>
+<td>99</td>
+<td>PIM cấp</td>
+<td>có</td>
+<td><strong>Khoá nối duy nhất.</strong> <span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> SS lưu <code>PD&lt;số&gt;</code> khớp đúng số alias PIM</td>
+</tr>
+<tr>
+<td><code>product_code</code></td>
+<td>SS <code>Athena Product Code</code> / PIM <code>product_code</code></td>
+<td>text</td>
+<td>105</td>
+<td>PIM</td>
+<td><strong>KHÔNG</strong></td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Cột SS <code>lockedForUser: true</code> ⇒ không ghi được. Vẫn đọc + đối chiếu (N3)</td>
+</tr>
+<tr>
+<td><code>product_name</code></td>
+<td>PIM <code>product_name</code></td>
+<td>text</td>
+<td>389/390 app</td>
+<td>PIM</td>
+<td>có, theo N5</td>
+<td>Tên chuẩn hoá của PIM</td>
+</tr>
+<tr>
+<td><code>game_name</code></td>
+<td>SS <code>Game Name</code></td>
+<td>text</td>
+<td>104</td>
+<td>SS</td>
+<td>—</td>
+<td><strong>Cột primary của sheet.</strong> <span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> 51/105 dòng đang trùng y hệt <code>product_code</code> nhưng vẫn bắt buộc giữ</td>
+</tr>
+<tr>
+<td><code>signal_code</code></td>
+<td>SS <code>SignalCode</code></td>
+<td>text</td>
+<td><strong>4</strong></td>
+<td>SS</td>
+<td>có</td>
+<td>Tên thứ ba của cùng một game ở một số case (§5.6)</td>
+</tr>
+</tbody></table></div>
+<h4 id="nhom-phan-loai" class="h-anchored"><a class="h-link" href="#nhom-phan-loai">Nhóm phân loại</a></h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Hub column</th>
+<th>Nguồn</th>
+<th>Kiểu</th>
+<th>Fill</th>
+<th>Chủ</th>
+<th>Ghi</th>
+<th>Ghi chú</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>product_team</code></td>
+<td>SS <code>Product Team</code> / PIM <code>product_team</code></td>
+<td>link → <code>Teams</code></td>
+<td>104</td>
+<td>PIM</td>
+<td>có, qua <code>ss_label</code></td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> khớp 47 / lệch 49</td>
+</tr>
+<tr>
+<td><code>product_group</code></td>
+<td>SS <code>Product Group</code> / PIM <code>product_group</code></td>
+<td>link → <code>Groups</code></td>
+<td>63</td>
+<td>PIM</td>
+<td>có, qua <code>ss_label</code>, <strong>bỏ qua nếu SS không có option</strong></td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> khớp 53 / lệch 1 / SS trống 42</td>
+</tr>
+<tr>
+<td><code>game_genre</code></td>
+<td>SS <code>Game Genre</code></td>
+<td>select</td>
+<td>~70</td>
+<td>SS</td>
+<td>—</td>
+<td>3 option, có typo <code>Stategy</code></td>
+</tr>
+<tr>
+<td><code>sub_genre</code></td>
+<td>SS <code>Sub-genre</code></td>
+<td><strong>text, không phải select</strong></td>
+<td>~12</td>
+<td>SS</td>
+<td>—</td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> 6/7 giá trị đang dùng nằm ngoài option ⇒ model là text để không mất dữ liệu</td>
+</tr>
+<tr>
+<td><code>store_genre</code></td>
+<td>PIM <code>genre</code></td>
+<td>text</td>
+<td>138/390 app</td>
+<td>PIM</td>
+<td>—</td>
+<td>Genre ghép kiểu store, độ mịn khác <code>game_genre</code></td>
+</tr>
+<tr>
+<td><code>studio</code></td>
+<td>SS <code>Studio</code></td>
+<td>select</td>
+<td><strong>0</strong></td>
+<td>SS</td>
+<td>—</td>
+<td>Cột bỏ dở; trùng ý nghĩa <code>product_team</code> nhưng khác cách viết hoa</td>
+</tr>
+<tr>
+<td><code>project_type</code></td>
+<td>SS <code>Project Type</code></td>
+<td>select</td>
+<td><strong>0</strong></td>
+<td>SS</td>
+<td>—</td>
+<td>Option có 5 giá trị, không ai dùng</td>
+</tr>
+<tr>
+<td><code>team_template</code></td>
+<td>SS <code>Team Template</code></td>
+<td>text</td>
+<td>~30</td>
+<td>SS</td>
+<td>—</td>
+<td>Có <code>Default</code> ngoài option</td>
+</tr>
+</tbody></table></div>
+<h4 id="nhom-vong-doi-bon-field-rieng-biet-khong-duoc-gop" class="h-anchored"><a class="h-link" href="#nhom-vong-doi-bon-field-rieng-biet-khong-duoc-gop">Nhóm vòng đời — bốn field riêng biệt, không được gộp</a></h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Hub column</th>
+<th>Bảng</th>
+<th>Nguồn</th>
+<th>Fill</th>
+<th>Ý nghĩa</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>stage</code></td>
+<td><strong><code>Apps</code></strong></td>
+<td>PIM <code>stage</code></td>
+<td>390/390 app</td>
+<td>Stage hiện tại của <strong>từng app</strong>, android và ios riêng</td>
+</tr>
+<tr>
+<td><code>stage</code></td>
+<td><code>Products</code></td>
+<td>rollup từ <code>Apps</code></td>
+<td>dẫn xuất</td>
+<td>Stage đại diện; thứ tự vòng đời <code>prototype &lt; product_test &lt; market_test &lt; production &lt; published</code>, <code>sunset</code>/<code>killed</code> chỉ lấy khi không còn app nào đang sống</td>
+</tr>
+<tr>
+<td><code>stages_reached</code></td>
+<td><code>Products</code></td>
+<td>SS <code>Product Stage</code></td>
+<td><strong>34</strong></td>
+<td><span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> Danh sách stage <strong>đã đi qua</strong> (multi-select) — cần PMO xác nhận (D-01)</td>
+</tr>
+<tr>
+<td><code>current_status</code></td>
+<td><code>Products</code></td>
+<td>SS <code>Current Project Status</code></td>
+<td><strong>103</strong></td>
+<td>Trạng thái vận hành PMO cập nhật. <span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Phân bố: Killed 56 · In Progress 20 · Closed 13 · On Hold 9 · Not Start 2 · <strong>Complete 2 (ngoài option)</strong> · 1 dòng rác</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p>Gộp bốn field này thành một là cách chắc chắn nhất để phá dữ liệu. Đây là lý do bảng <code>Apps</code> không thể bỏ.</p>
+</blockquote>
+<h4 id="nhom-nguoi-phu-trach" class="h-anchored"><a class="h-link" href="#nhom-nguoi-phu-trach">Nhóm người phụ trách</a></h4>
+<p><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Tất cả cột contact của Smartsheet <strong>trộn hai định dạng</strong> — có lúc là email thuần (<code>minhlq@athena.studio</code>), có lúc là <code>Name &lt;email&gt;</code> (<code>Minh Lam &lt;minhlq@athena.studio&gt;</code>). Còn lệch hoa/thường (<code>BacTh@</code> vs <code>bacth@</code>, <code>Trietpm@</code> vs <code>trietpm@</code>). ⇒ Engine phải parse cả hai dạng và so sánh không phân biệt hoa/thường.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Hub column</th>
+<th>Nguồn</th>
+<th>Kiểu</th>
+<th>Fill</th>
+<th>Ghi chú</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>project_manager</code></td>
+<td>SS <code>Project Manager</code></td>
+<td>contact</td>
+<td>92</td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> <strong>Một nguồn duy nhất</strong> — PIM không có field PM (§6.1). <code>PD347</code> để <strong>tên người</strong> (<code>Atilla Kabakcıoğlu</code>) thay vì email</td>
+</tr>
+<tr>
+<td><code>product_owner</code></td>
+<td>SS <code>Product Owner</code></td>
+<td>contact</td>
+<td>48</td>
+<td><code>PD376</code> có email sai chính tả <code>quanlh@athena.stud**d**io</code></td>
+</tr>
+<tr>
+<td><code>game_sponsor</code></td>
+<td>SS <code>Game Sponsor</code></td>
+<td>multi-contact</td>
+<td>~35</td>
+<td></td>
+</tr>
+<tr>
+<td><code>game_project_approver</code></td>
+<td>SS <code>Game Project Approver</code></td>
+<td>contact</td>
+<td>~60</td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> <strong>Toàn bộ đều là <code>luke@athena.studio</code></strong> — hằng số trên thực tế</td>
+</tr>
+<tr>
+<td><code>pmo_pic</code></td>
+<td>SS <code>PMO PIC</code></td>
+<td>multi-contact</td>
+<td>~50</td>
+<td></td>
+</tr>
+<tr>
+<td><code>signal_pic</code></td>
+<td>SS <code>Signal PIC</code></td>
+<td>contact</td>
+<td><strong>0</strong></td>
+<td></td>
+</tr>
+<tr>
+<td><code>motion_pic</code></td>
+<td>SS <code>Motion PIC</code></td>
+<td>text</td>
+<td>105 nhưng vô nghĩa</td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Formula cấp cột <code>=&quot;loclv@athena.studio&quot;</code> ⇒ hằng số, và cột có formula thì <strong>API không ghi được</strong> dù có quyền gì</td>
+</tr>
+<tr>
+<td><code>pim_created_by</code></td>
+<td>PIM <code>created_by</code></td>
+<td>text</td>
+<td>203/272 product</td>
+<td><strong>KHÔNG phải PM</strong> — là người/tiến trình nhập record vào PIM (§6.1)</td>
+</tr>
+</tbody></table></div>
+<h4 id="nhom-thoi-gian-phe-duyet-chi-phi" class="h-anchored"><a class="h-link" href="#nhom-thoi-gian-phe-duyet-chi-phi">Nhóm thời gian, phê duyệt, chi phí</a></h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Hub column</th>
+<th>Nguồn</th>
+<th>Kiểu</th>
+<th>Fill</th>
+<th>Ghi</th>
+<th>Ghi chú</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>request_type</code></td>
+<td>SS <code>Request Type</code></td>
+<td>select</td>
+<td>34</td>
+<td>có</td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Chỉ còn <strong>2</strong> option (New Product, On-going Product); <code>validation: true</code></td>
+</tr>
+<tr>
+<td><code>project_approval_status</code></td>
+<td>SS</td>
+<td>select</td>
+<td>~100</td>
+<td>có</td>
+<td>Gần như toàn bộ là <code>Approved</code>; đúng 1 dòng <code>Declined</code></td>
+</tr>
+<tr>
+<td><code>target_start_date</code></td>
+<td>SS</td>
+<td>date</td>
+<td>~60</td>
+<td>có</td>
+<td>Tag <code>GANTT_START_DATE</code></td>
+</tr>
+<tr>
+<td><code>actual_start_date</code></td>
+<td>SS</td>
+<td>date</td>
+<td>~85</td>
+<td>có</td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> <strong>Không</strong> suy ra được từ PIM <code>kick_off_date</code>: lệch từ 3 ngày tới 4 năm</td>
+</tr>
+<tr>
+<td><code>actual_end_date</code></td>
+<td>SS</td>
+<td>date</td>
+<td>~80</td>
+<td>có</td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Có rác: <code>PD289</code> = <code>2239-02-07</code>; dòng <code>arrowflow2</code> = chuỗi <code>&quot;24d&quot;</code> trong cột DATE</td>
+</tr>
+<tr>
+<td><code>current_status_date</code></td>
+<td>SS</td>
+<td>date</td>
+<td>~55</td>
+<td><strong>KHÔNG</strong></td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> <code>lockedForUser: true</code>. Nhiều dòng dùng chung một ngày ⇒ <span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> có vẻ là ngày rà soát theo lô</td>
+</tr>
+<tr>
+<td><code>target_go_live_date</code></td>
+<td>SS</td>
+<td>date</td>
+<td><strong>1</strong></td>
+<td>có</td>
+<td>Chỉ <code>PD289</code></td>
+</tr>
+<tr>
+<td><code>project_duration_workdays</code></td>
+<td>SS</td>
+<td>decimal</td>
+<td>~55</td>
+<td>có</td>
+<td>Trả về dạng float <code>40.0</code></td>
+</tr>
+<tr>
+<td><code>project_cost_baseline_usd</code></td>
+<td>SS</td>
+<td>decimal</td>
+<td>~50</td>
+<td>có</td>
+<td><code>30000.0</code>, <code>50498.0</code>…</td>
+</tr>
+<tr>
+<td><code>project_cost_variant</code></td>
+<td>SS</td>
+<td>decimal</td>
+<td>~45</td>
+<td>có</td>
+<td><span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> Giá trị 0.1–0.3 ⇒ là <strong>tỉ lệ</strong>, không phải số tiền</td>
+</tr>
+<tr>
+<td><code>schedule_at_risk</code></td>
+<td>SS</td>
+<td>select RYG</td>
+<td><strong>4</strong></td>
+<td>có</td>
+<td>PD232 Red · PD233 Yellow · PD234 Green · PD277 Red</td>
+</tr>
+<tr>
+<td><code>kick_off</code> / <code>closing</code> / <code>report_closing</code></td>
+<td>SS</td>
+<td>text</td>
+<td><strong>0 / 0 / 0</strong></td>
+<td>có</td>
+<td>Rỗng hoàn toàn</td>
+</tr>
+</tbody></table></div>
+<h4 id="nhom-lien-ket-va-metadata" class="h-anchored"><a class="h-link" href="#nhom-lien-ket-va-metadata">Nhóm liên kết và metadata</a></h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Hub column</th>
+<th>Nguồn</th>
+<th>Kiểu</th>
+<th>Fill</th>
+<th>Ghi chú</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ss_tracking_sheet_id</code></td>
+<td>SS <code>Sheet ID</code></td>
+<td><strong>TEXT</strong></td>
+<td><strong>60</strong></td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Trỏ tới sheet tracking riêng của product. Các sheet <strong>tồn tại thật nhưng không được share</strong> — calibration: ID bịa trả <code>1006 Not Found</code>, ID thật trả <code>2251 workspace access required</code></td>
+</tr>
+<tr>
+<td><code>team_composition</code></td>
+<td>SS</td>
+<td>long text</td>
+<td>~55</td>
+<td>Văn bản tự do (<code>&quot;1 Senior DEV, 1 Senior GA, 0.5 QC&quot;</code>)</td>
+</tr>
+<tr>
+<td><code>opc_link</code></td>
+<td>SS <code>OPC Link</code></td>
+<td>text</td>
+<td>~35</td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> <strong>9 dòng chứa NGÀY thay vì link</strong> (PD328 <code>01/20/26</code>, PD334 <code>03/02/26</code>…)</td>
+</tr>
+<tr>
+<td><code>dashboard_link</code></td>
+<td>SS</td>
+<td>text</td>
+<td>~60</td>
+<td>Trộn 3 loại URL: <code>/reports/</code>, <code>/dashboards/</code>, <code>/sheets/</code></td>
+</tr>
+<tr>
+<td><code>project_budgeting_file</code></td>
+<td>SS</td>
+<td>text</td>
+<td>~40</td>
+<td>Link Google Sheets</td>
+</tr>
+<tr>
+<td><code>signal_validation_proof</code></td>
+<td>SS</td>
+<td>text</td>
+<td><strong>0</strong></td>
+<td></td>
+</tr>
+<tr>
+<td><code>ss_row_id</code></td>
+<td>Smartsheet rowId</td>
+<td>TEXT</td>
+<td>105</td>
+<td>Khoá đối chiếu dòng. <span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> Smartsheet <strong>cấp lại rowId khi move/copy</strong> ⇒ phải giữ <code>row_map</code> chứ không tin rowId mãi</td>
+</tr>
+<tr>
+<td><code>ss_submitter</code> / <code>ss_submitted_at</code></td>
+<td>SS <code>Submitter</code> / <code>Submission Date</code></td>
+<td>contact / datetime</td>
+<td>105</td>
+<td>Cột hệ thống, read-only</td>
+</tr>
+<tr>
+<td><code>ss_modified_by</code> / <code>ss_modified_at</code></td>
+<td>SS <code>Modified By</code> / <code>Modified</code></td>
+<td>contact / datetime</td>
+<td>105</td>
+<td>Cột hệ thống — <strong>dùng làm delta detection</strong></td>
+</tr>
+<tr>
+<td><code>sync_state</code></td>
+<td>hub tự sinh</td>
+<td>select</td>
+<td>—</td>
+<td><code>draft</code> · <code>pending_alias</code> · <code>aliased</code> · <code>synced</code> · <code>conflict</code> · <code>hub_only</code></td>
+</tr>
+<tr>
+<td><code>hub_only_fields</code></td>
+<td>hub tự sinh</td>
+<td>text[]</td>
+<td>—</td>
+<td>Danh sách field có giá trị mà Smartsheet không biểu diễn được (N1)</td>
+</tr>
+</tbody></table></div>
+<p>Tổng: <strong>44 cột Smartsheet</strong> đều có chỗ, cộng các field lift từ PIM và các field hạ tầng của hub.</p>
+<h3 id="sec-5-3" class="h-anchored"><span class="h-num">5.3</span><a class="h-link" href="#sec-5-3">Bảng <code>Apps</code></a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Hub column</th>
+<th>PIM field</th>
+<th>Kiểu</th>
+<th>Ghi chú</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>product</code></td>
+<td><code>alias</code></td>
+<td>link → <code>Products</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>app_name</code></td>
+<td><code>app</code></td>
+<td>text</td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> 390/390 phân biệt</td>
+</tr>
+<tr>
+<td><code>app_platform</code></td>
+<td><code>app_platform</code></td>
+<td>select</td>
+<td>Đúng 2 giá trị: <code>android</code>, <code>ios</code></td>
+</tr>
+<tr>
+<td><code>app_id</code></td>
+<td><code>app_id</code></td>
+<td>text</td>
+<td>309/390</td>
+</tr>
+<tr>
+<td><code>package_name</code></td>
+<td><code>package_name</code></td>
+<td>text</td>
+<td>330/390 — <strong>là tie-breaker định danh</strong> (§5.6)</td>
+</tr>
+<tr>
+<td><code>stage</code></td>
+<td><code>stage</code></td>
+<td>select 7 giá trị</td>
+<td>Cấp app, xem §5.2</td>
+</tr>
+<tr>
+<td><code>icon</code></td>
+<td><code>icon</code></td>
+<td>text (URL)</td>
+<td>243/390</td>
+</tr>
+<tr>
+<td><code>store_url</code></td>
+<td><code>store_url</code></td>
+<td>text</td>
+<td>200/390</td>
+</tr>
+<tr>
+<td><code>kick_off_date</code></td>
+<td><code>kick_off_date</code></td>
+<td>date</td>
+<td>359/390. Serial Excel trong export, cần convert</td>
+</tr>
+<tr>
+<td><code>finished_prototype_date</code></td>
+<td><code>finished_protype_date</code></td>
+<td>date</td>
+<td>110/390. Giữ nguyên lỗi chính tả của nguồn trong <code>col_map</code>, tên hub thì viết đúng</td>
+</tr>
+<tr>
+<td><code>pim_last_updated</code></td>
+<td><code>last_updated</code></td>
+<td>datetime</td>
+<td><span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> <strong>Không dùng làm tie-break</strong>: PIM ghi hai dòng platform trong cùng batch nên timestamp bằng nhau</td>
+</tr>
+</tbody></table></div>
+<p>Chiều đồng bộ: <strong>PIM → hub một chiều.</strong> Smartsheet không có khái niệm app.</p>
+<h3 id="sec-5-4" class="h-anchored"><span class="h-num">5.4</span><a class="h-link" href="#sec-5-4"><code>Teams</code> và <code>Groups</code></a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Ghi chú</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>name</code></td>
+<td>Vocab <strong>PIM</strong> là canonical (23 team / 11 group)</td>
+</tr>
+<tr>
+<td><code>ss_label</code></td>
+<td>Nhãn tương ứng bên Smartsheet, hoặc <strong>NULL nếu Smartsheet không có</strong></td>
+</tr>
+<tr>
+<td><code>is_active</code></td>
+<td>Đánh dấu team/group đã ngừng</td>
+</tr>
+</tbody></table></div>
+<p>Engine dịch PIM → SS qua <code>ss_label</code>; <code>ss_label</code> NULL ⇒ không ghi, đánh <code>hub_only</code> (N1). Không đối xứng là <strong>chấp nhận được</strong> vì hai field này một chủ một chiều: <span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> PIM có hậu tố sub-team (<code>- I</code>, <code>- II</code>, <code>- III</code>) mà Smartsheet chủ ý không theo dõi, nên không bao giờ cần dịch ngược.</p>
+<h3 id="sec-5-5" class="h-anchored"><span class="h-num">5.5</span><a class="h-link" href="#sec-5-5">Định danh: một khoá, nhiều tên</a></h3>
+<p><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Đã verify <code>Athena Product Code</code> (SS) <strong>chính là</strong> <code>product_code</code> (PIM): trên 96 dòng so được, khớp <strong>82</strong> (65 y hệt + 15 khác hoa/thường + 2 khác hậu tố <code>tds</code>) = <strong>85,4%</strong>, và <strong>không có dòng nào chứng minh được là hai product khác nhau</strong>.</p>
+<p>Nhưng cùng một game có thể mang tới <strong>ba tên</strong> ở ba hệ. Ví dụ <code>PD307</code>: PIM <code>arrowflow</code>, Smartsheet <code>arrowescape</code>, <code>SignalCode</code> <code>ArrowColorJam</code>.</p>
+<p><strong>Quyết định (D-05): giữ phẳng, không tách bảng <code>ProductIdentifiers</code>.</strong> Lý do: chỉ ~6/95 alias cần tới tie-breaker, tách bảng cho 6 case là abstraction không xứng chi phí. Thay vào đó dùng <code>product_code</code> (PIM), <code>game_name</code> (SS), <code>signal_code</code> (SS), cộng <code>package_name</code>/<code>app_id</code> trên <code>Apps</code> làm bằng chứng khi cần.</p>
+<p><strong>Quy tắc match dùng trong engine</strong> (<span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> rút ra từ dữ liệu, thứ tự bắt buộc):</p>
+<ol>
+<li>So <code>product_alias</code> — đây là khoá, không có bước 2 nếu alias khác.</li>
+<li>Khi cần xác nhận <code>product_code</code> cùng nghĩa: chuẩn hoá về chữ thường, bỏ ký tự không phải chữ-số.</li>
+<li>Bỏ hậu tố <code>tds</code>.</li>
+<li>Coi <code>prototype*</code> và <code>prototype_N</code> là <strong>placeholder</strong>, không phải tên thật.</li>
+<li>Tie-break bằng <code>package_name</code>/<code>app_id</code>, <strong>nhưng chỉ tính khi package của PIM chứa code của Smartsheet</strong> — package của PIM đương nhiên chứa code của PIM, dùng chiều đó là suy luận vòng tròn.</li>
+</ol>
+<blockquote>
+<p><span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> Nếu chỉ so <code>product_code</code> thô mà bỏ 5 bước trên, tỉ lệ báo động giả khoảng <strong>70%</strong>.</p>
+</blockquote>
+<h3 id="sec-5-6" class="h-anchored"><span class="h-num">5.6</span><a class="h-link" href="#sec-5-6">ERD đầy đủ trường</a></h3>
+<p>Đây là bản chuẩn để dựng schema. Chú thích trong mỗi trường ghi <strong>hệ sở hữu</strong> và <strong>fill-rate đã đo</strong> (trên 105 dòng Smartsheet, hoặc 390 dòng app với <code>APPS</code>), để người đọc biết ngay trường nào có dữ liệu thật.</p>
+<figure class="diagram"><pre class="mermaid">erDiagram
+  GROUPS   ||--o{ PRODUCTS : "product_group · link ĐỘC LẬP"
+  TEAMS    ||--o{ PRODUCTS : "product_team · link ĐỘC LẬP"
+  PRODUCTS ||--o{ APPS     : "1 product – 1..2 app theo platform"
+
+  PRODUCTS {
+    text product_alias PK "PD### · khoá nối · UNIQUE sau khi dọn cổng G1 · fill 99"
+    text product_code "PIM · SS locked ⇒ CHỈ ĐỌC · fill 105"
+    text product_name "PIM · ghi theo quy tắc N5 · 389/390 app"
+    text game_name "SS primary · trùng product_code ở 51 dòng · fill 104"
+    text signal_code "SS SignalCode · fill 4"
+    link product_team "→ TEAMS · PIM sở hữu · ghi qua ss_label · fill 104"
+    link product_group "→ GROUPS · PIM sở hữu · KHÔNG derive từ team · fill 63"
+    select game_genre "SS · 3 option · có typo Stategy · fill ~70"
+    text sub_genre "SS · để TEXT vì 6/7 giá trị ngoài option · fill ~12"
+    text store_genre "PIM genre · 27 giá trị kiểu store · 138/390 app"
+    select studio "SS · fill 0 · cột bỏ dở"
+    select project_type "SS · fill 0 · cột bỏ dở"
+    text team_template "SS · có Default ngoài option · fill ~30"
+    select stage "ROLLUP từ APPS.stage · PIM · dẫn xuất"
+    multiselect stages_reached "SS Product Stage · fill 34 · nghĩa cần PMO chốt D-01"
+    select current_status "SS · fill 103 · có Complete ngoài option"
+    date current_status_date "SS · locked ⇒ CHỈ ĐỌC · fill ~55"
+    contact project_manager "SS · MỘT nguồn duy nhất · fill 92"
+    contact product_owner "SS · fill 48 · có email typo studdio"
+    contact game_project_approver "SS · toàn bộ là luke@ · fill ~60"
+    contact signal_pic "SS · fill 0"
+    multicontact game_sponsor "SS · trộn 2 định dạng contact · fill ~35"
+    multicontact pmo_pic "SS · trộn 2 định dạng contact · fill ~50"
+    text motion_pic "SS · formula hằng số ⇒ KHÔNG GHI ĐƯỢC"
+    text pim_created_by "PIM · KHÔNG phải PM · 203/272 product"
+    select request_type "SS · còn 2 option · fill 34"
+    select project_approval_status "SS · gần như toàn bộ Approved · fill ~100"
+    date target_start_date "SS · tag GANTT_START_DATE · fill ~60"
+    date actual_start_date "SS · KHÔNG suy từ kick_off_date · fill ~85"
+    date actual_end_date "SS · có rác 2239-02-07 và chuỗi 24d · fill ~80"
+    date target_go_live_date "SS · fill 1"
+    decimal project_duration_workdays "SS · trả về dạng float · fill ~55"
+    decimal project_cost_baseline_usd "SS · fill ~50"
+    decimal project_cost_variant "SS · là TỈ LỆ 0.1-0.3 không phải tiền · fill ~45"
+    select schedule_at_risk "SS symbol RYG · fill 4"
+    text ss_tracking_sheet_id "SS Sheet ID · TEXT không phải number · fill 60"
+    text team_composition "SS · văn bản tự do · fill ~55"
+    text opc_link "SS · 9 dòng chứa NGÀY thay vì link · fill ~35"
+    text dashboard_link "SS · trộn reports và dashboards và sheets · fill ~60"
+    text project_budgeting_file "SS · link Google Sheets · fill ~40"
+    text signal_validation_proof "SS · fill 0"
+    text kick_off "SS · fill 0"
+    text closing "SS · fill 0"
+    text report_closing "SS · fill 0"
+    text ss_row_id "khoá đối chiếu dòng · ĐỔI khi move/copy"
+    contact ss_submitter "SS CREATED_BY · read-only · lộ writer tự động"
+    datetime ss_submitted_at "SS CREATED_DATE · read-only"
+    contact ss_modified_by "SS MODIFIED_BY · read-only"
+    datetime ss_modified_at "SS MODIFIED_DATE · dùng làm DELTA DETECTION"
+    select sync_state "hub · draft / pending_alias / aliased / synced / conflict"
+    textarray hub_only_fields "hub · field SS không biểu diễn được, xem N1"
+  }
+
+  APPS {
+    text product_alias FK "→ PRODUCTS.product_alias"
+    text app_name "PIM app · 390/390 phân biệt"
+    select app_platform "PIM · đúng 2 giá trị android và ios"
+    text app_id "PIM · 309/390 · tie-breaker định danh"
+    text package_name "PIM · 330/390 · tie-breaker định danh"
+    select stage "PIM · 7 giá trị · CẤP APP không phải cấp product · 390/390"
+    text icon "PIM · URL · 243/390"
+    text store_url "PIM · 200/390"
+    date kick_off_date "PIM · 359/390 · serial Excel cần convert"
+    date finished_prototype_date "PIM · 110/390 · nguồn viết sai là protype"
+    datetime pim_last_updated "PIM · KHÔNG dùng tie-break, trùng theo batch"
+  }
+
+  TEAMS {
+    text name PK "vocab PIM là canonical · 23 giá trị · có rác 0.375"
+    text ss_label "nhãn Smartsheet · NULL ⇒ hub_only, không ghi"
+    bool is_active
+  }
+
+  GROUPS {
+    text name PK "vocab PIM là canonical · 11 giá trị"
+    text ss_label "Smartsheet chỉ có 5 option ⇒ 6 group PIM không có nhãn"
+    bool is_active
+  }</pre></figure>
+<p>Bốn trường vòng đời trong ERD trên nằm ở hai bảng khác nhau, cố ý — <code>APPS.stage</code> là nguồn gốc, <code>PRODUCTS.stage</code> là rollup, <code>PRODUCTS.stages_reached</code> và <code>PRODUCTS.current_status</code> đến từ Smartsheet. Xem §5.2 nhóm vòng đời.</p>
+<h3 id="sec-5-7" class="h-anchored"><span class="h-num">5.7</span><a class="h-link" href="#sec-5-7">Bản đồ chuyển kiểu cột</a></h3>
+<p>Chỉ liệt kê <strong>các kiểu thật có trong Product Intake Sheet</strong> (<span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> theo <code>get_columns</code> ngày 2026-07-29), không phải toàn bộ kiểu Smartsheet. Điều này rút gọn đáng kể phạm vi <code>irConverter</code> so với thiết kế tổng quát cũ.</p>
+<figure class="diagram"><pre class="mermaid">flowchart LR
+  subgraph SST["Kiểu Smartsheet có trong sheet này"]
+    TN["TEXT_NUMBER&lt;br/&gt;28 cột"]
+    PL["PICKLIST&lt;br/&gt;8 cột (1 cột có symbol RYG)"]
+    MPL["MULTI_PICKLIST&lt;br/&gt;1 cột: Product Stage"]
+    CL["CONTACT_LIST&lt;br/&gt;4 cột"]
+    MCL["MULTI_CONTACT_LIST&lt;br/&gt;2 cột"]
+    DT["DATE&lt;br/&gt;5 cột"]
+    SYS["Cột hệ thống&lt;br/&gt;CREATED_BY/DATE, MODIFIED_BY/DATE"]
+    FML["Cột có formula&lt;br/&gt;Motion PIC"]
+  end
+
+  subgraph HUBT["Kiểu trong hub"]
+    T1["SingleLineText · Decimal · LongText&lt;br/&gt;(chọn theo từng cột, KHÔNG suy tự động)"]
+    T2["SingleSelect · hoặc TEXT nếu dữ liệu vượt option"]
+    T3["MultiSelect"]
+    T4["User / contact"]
+    T5["Date"]
+    T6["Cột mirror một chiều, read-only phía hub"]
+  end
+
+  TN  --&gt;|"<span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> KHÔNG tự suy kiểu: 379.0 là mã, 0.3 là tỉ lệ, Sheet ID phải TEXT"| T1
+  PL  --&gt;|"<span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> giữ TEXT khi dữ liệu vượt option (Sub-genre 6/7)"| T2
+  MPL --&gt;|"<span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> chỉ đọc được qua objectValue"| T3
+  CL  --&gt;|"<span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> parse cả email và dạng Name email · so không phân biệt hoa thường"| T4
+  MCL --&gt;|"<span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> chỉ đọc được qua objectValue"| T4
+  DT  --&gt;|"<span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> nhận cả giá trị vô lý: 2239-02-07, chuỗi 24d"| T5
+  SYS --&gt;|"❌ một chiều, không bao giờ ghi"| T6
+  FML --&gt;|"❌ API không ghi được dù có quyền"| T6
+
+  style SYS fill:#f8d7da,stroke:#c33
+  style FML fill:#f8d7da,stroke:#c33
+  style TN fill:#fff3cd,stroke:#b8860b
+  style CL fill:#fff3cd,stroke:#b8860b</pre></figure>
+<p><strong>Bốn kiểu Smartsheet khó nhất thì sheet này KHÔNG có</strong> — <span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> đã kiểm bằng <code>get_columns</code>: không có <code>PREDECESSOR</code>, không có <code>DURATION</code>, không có <code>ABSTRACT_DATETIME</code>, không có <code>CHECKBOX</code>. Nhờ vậy toàn bộ lớp xử lý predecessor ba lớp và hierarchy replay trong thiết kế cũ <strong>không cần cho phase này</strong> (xem Phụ lục C).</p>
+<hr>
+<h2 id="sec-6" class="h-anchored"><span class="h-num">6</span><a class="h-link" href="#sec-6">Quyền sở hữu và quy tắc ghi</a></h2>
+<h3 id="sec-6-1" class="h-anchored"><span class="h-num">6.1</span><a class="h-link" href="#sec-6-1">Ma trận: chỉ 9/44 field có khả năng lệch</a></h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>SS field</th>
+<th>PIM field</th>
+<th>Kết quả đo</th>
+<th>Xử lý</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Product Alias</code></td>
+<td><code>alias</code></td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> 92/95 giao nhau</td>
+<td>Khoá</td>
+</tr>
+<tr>
+<td><code>Athena Product Code</code></td>
+<td><code>product_code</code></td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> khớp 82/96</td>
+<td>PIM là chủ; <strong>không ghi</strong> (locked)</td>
+</tr>
+<tr>
+<td><code>Game Name</code></td>
+<td><code>product_name</code></td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> 33 y hệt · 28 khác hoa/thường · 24 SS tệ hơn · <strong>10 PIM tệ hơn</strong></td>
+<td>Quy tắc N5</td>
+</tr>
+<tr>
+<td><code>Product Team</code></td>
+<td><code>product_team</code></td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> khớp 47 / lệch 49</td>
+<td>PIM là chủ, ghi qua <code>ss_label</code></td>
+</tr>
+<tr>
+<td><code>Product Group</code></td>
+<td><code>product_group</code></td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> khớp 53 / lệch 1 / SS trống 42</td>
+<td>PIM là chủ, ghi qua <code>ss_label</code>, bỏ qua khi thiếu option</td>
+</tr>
+<tr>
+<td><code>Product Stage</code> + <code>Current Project Status</code></td>
+<td><code>stage</code></td>
+<td><span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> <strong>khác nghĩa</strong></td>
+<td>Bốn field riêng (§5.2)</td>
+</tr>
+<tr>
+<td><code>Game Genre</code> + <code>Sub-genre</code></td>
+<td><code>genre</code></td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> khác độ mịn</td>
+<td>Không map tự động; giữ song song</td>
+</tr>
+<tr>
+<td><code>Actual Start Date</code></td>
+<td><code>kick_off_date</code></td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> lệch 3 ngày → 4 năm</td>
+<td><strong>Không suy ra nhau</strong></td>
+</tr>
+<tr>
+<td><code>Project Manager</code></td>
+<td><code>created_by</code></td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> trùng 44 / lệch 40</td>
+<td><strong>Không so được</strong> — xem dưới</td>
+</tr>
+</tbody></table></div>
+<p><strong>Về <code>Project Manager</code>:</strong> <span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> PIM export <strong>không có field project manager</strong>. Field gần nhất là <code>created_by</code>, và phân bố chứng minh nó là người nhập record: <code>thubm@</code> 62 product · <code>bacth@</code> 46 · <code>sonpd@</code> 17 · <code>nhannt@</code> 17 · <strong><code>system@athena.studio</code> 11</strong> · 69 product để trống. Tỉ lệ trùng 52% chỉ là do một số PM tự nhập record của mình. ⇒ <code>project_manager</code> hiện <strong>một nguồn</strong>, không thể lệch. Nhưng file export chỉ có 17 cột trong khi PIM là ứng dụng đầy đủ ⇒ <strong>D-09: hỏi chủ PIM có field owner/PM chưa được export không.</strong></p>
+<p><strong>Chỉ có ở PIM (7 field):</strong> <code>app_platform</code>, <code>app_id</code>, <code>package_name</code>, <code>store_url</code>, <code>icon</code>, <code>finished_protype_date</code>, <code>last_updated</code> — dữ liệu cấp app/store, Smartsheet không cover.
+<strong>Chỉ có ở Smartsheet (34 field):</strong> toàn bộ governance, tài chính, phê duyệt, người phụ trách, link.
+Với 41 field một-chủ này: <strong>mặc định bên duy nhất có field đó là chủ</strong>, không cần luật gì thêm.</p>
+<h3 id="sec-6-2" class="h-anchored"><span class="h-num">6.2</span><a class="h-link" href="#sec-6-2">Quy tắc ghi an toàn (thay cho ma trận ownership thô)</a></h3>
+<div class="code-wrap"><pre><code>function shouldWrite(field, valueFromOwner, valueAtTarget):
+    if valueFromOwner is empty            -&gt; KHÔNG ghi
+    if isPlaceholder(valueFromOwner)      -&gt; KHÔNG ghi        # không đè tên thật bằng prototype*
+    if valueAtTarget is empty             -&gt; GHI
+    if isPlaceholder(valueAtTarget)       -&gt; GHI
+    if normalize(a) == normalize(b)       -&gt; KHÔNG ghi        # chỉ khác hoa/thường, đừng tạo nhiễu audit
+    if targetColumn is locked or formula  -&gt; KHÔNG ghi, ghi drift_report
+    if value không có option ở đích       -&gt; KHÔNG ghi, đánh hub_only
+    otherwise                             -&gt; ghi drift_report, CHỜ người quyết</code></pre></div>
+<p><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Bằng chứng cho nhánh thứ hai: 10 dòng ở nhóm E của Exceptions Register sẽ bị phá nếu bỏ nhánh đó (<code>PD329</code> <em>Category Sort</em> → <code>prototype28</code>, <code>PD348</code> <em>Sticker Flow</em> → <code>prototype31</code>…).</p>
+<p>Cùng logic đó dưới dạng sơ đồ quyết định:</p>
+<figure class="diagram"><pre class="mermaid">flowchart TB
+  START["Phát hiện hai bên khác giá trị trên cùng một field"]
+  START --&gt; ONE{"Field có tồn tại&lt;br/&gt;ở CẢ HAI hệ?"}
+  ONE -- "không (41/44 field)" --&gt; SINGLE["Không phải lệch —&lt;br/&gt;bên duy nhất có field đó là chủ"]
+  ONE -- "có (9 field)" --&gt; SEM{"Hai bên có CÙNG&lt;br/&gt;ngữ nghĩa không?"}
+  SEM -- "không" --&gt; COEXIST["Không phải xung đột —&lt;br/&gt;giữ song song hai field&lt;br/&gt;(stage vs current_status,&lt;br/&gt;genre vs store_genre)"]
+  SEM -- "có" --&gt; LOCK{"Ô đích locked,&lt;br/&gt;có formula, hay là&lt;br/&gt;cột hệ thống?"}
+  LOCK -- "có" --&gt; RO["KHÔNG ghi&lt;br/&gt;ghi drift_report"]
+  LOCK -- "không" --&gt; OPT{"Đích có biểu diễn&lt;br/&gt;được giá trị này?"}
+  OPT -- "không" --&gt; HUBONLY["KHÔNG ghi&lt;br/&gt;đánh hub_only&lt;br/&gt;(N1 — không dồn vào Others)"]
+  OPT -- "có" --&gt; SRC{"Giá trị nguồn rỗng&lt;br/&gt;hay là placeholder?"}
+  SRC -- "có" --&gt; SKIP["KHÔNG ghi —&lt;br/&gt;không đè tên thật&lt;br/&gt;bằng prototype"]
+  SRC -- "không" --&gt; TGT{"Ô đích rỗng hay&lt;br/&gt;là placeholder?"}
+  TGT -- "có" --&gt; WRITE["<span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> GHI"]
+  TGT -- "không" --&gt; NORM{"Chỉ khác&lt;br/&gt;hoa/thường?"}
+  NORM -- "có" --&gt; NOOP["KHÔNG ghi —&lt;br/&gt;tránh nhiễu audit"]
+  NORM -- "không" --&gt; DRIFT["⏸ drift_report&lt;br/&gt;CHỜ PMO quyết&lt;br/&gt;engine KHÔNG tự chọn"]
+
+  style WRITE fill:#dfd,stroke:#2d7d2d
+  style DRIFT fill:#fff3cd,stroke:#b8860b
+  style RO fill:#f8d7da,stroke:#c33
+  style HUBONLY fill:#e8f0fe,stroke:#3367d6</pre></figure>
+<p>Nhánh cuối là điểm quan trọng nhất về mặt vận hành: <strong>engine không tự giải quyết xung đột thật.</strong> Nó ghi vào <code>drift_report</code> và để PMO quyết. Charter §6.1 EX-004 cũng yêu cầu như vậy.</p>
+<blockquote>
+<p><span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> Đây là chỗ bản thiết kế cũ khác hẳn: sơ đồ conflict-resolution trong <code>research/2026-07-15-sync-architecture-diagrams.md</code> §11 dùng <strong>LWW (last-write-wins) với &quot;Smartsheet thắng khi hoà&quot;</strong>. Bản v3.0 <strong>bỏ LWW</strong> vì hai lý do đã đo được: tie-break bằng timestamp không dùng được (PIM ghi hai dòng platform cùng batch nên timestamp bằng nhau), và LWW sẽ tự động phá 10 dòng ở nhóm E. Xem Phụ lục C.</p>
+</blockquote>
+<h3 id="sec-6-3" class="h-anchored"><span class="h-num">6.3</span><a class="h-link" href="#sec-6-3">Xung đột không phải là xung đột</a></h3>
+<p><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> 20 case &quot;PIM nói <code>production</code>/<code>published</code> nhưng Smartsheet nói <code>Killed</code>&quot; <strong>không</strong> phải xung đột cần giải: <code>stage</code> (PIM) và <code>current_status</code> (SS) là hai field khác nhau, hai chủ khác nhau, cùng tồn tại hợp lệ. Engine chỉ <strong>xuất báo cáo</strong> cho PMO, tuyệt đối không tự sửa.</p>
+<hr>
+<h2 id="sec-7" class="h-anchored"><span class="h-num">7</span><a class="h-link" href="#sec-7">Kiến trúc engine đồng bộ</a></h2>
+<h3 id="sec-7-1" class="h-anchored"><span class="h-num">7.1</span><a class="h-link" href="#sec-7-1">Vị trí trong fork</a></h3>
+<p>Engine là một <strong>job module bên trong fork NocoDB</strong>, không phải service ngoài. <span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Lý do: chạy trong process thì gọi được internal service, không bị giới hạn REST của chính mình, và có sẵn khuôn mẫu.</p>
+<div class="code-wrap"><pre><code>packages/nocodb/src/modules/jobs/jobs/hub-sync/     ← module mới
+  hub-sync.controller.ts
+  hub-sync.processor.ts
+  engine/            ir-converter, matcher, write-planner
+  connectors/        smartsheet.ts, pim.ts
+  helpers/</code></pre></div>
+<p><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Khuôn mẫu tham chiếu: <code>modules/jobs/jobs/at-import/</code> (đã có <code>controller</code> + <code>processor</code> + <code>engine/</code> + <code>helpers/</code>).</p>
+<p><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Hạ tầng queue đã kiểm trong repo: <code>@nestjs/bull</code> ^10.2.3 + <code>bull</code> ^4.16.5 (<strong>là Bull v4, không phải BullMQ</strong> — spec cũ ghi sai), với hai implementation <code>modules/jobs/fallback/</code> (in-memory) và <code>modules/jobs/redis/</code>. ⇒ <strong>Nếu không set <code>NC_REDIS_URL</code> thì job nằm in-memory và mất khi restart</strong> → quyết định D-08.</p>
+<figure class="diagram"><pre class="mermaid">flowchart TB
+  subgraph FORK["packages/nocodb (fork)"]
+    subgraph MOD["modules/jobs/jobs/hub-sync/ — MỚI, theo mẫu at-import"]
+      CTRL["hub-sync.controller.ts&lt;br/&gt;trigger · abort · status"]
+      PROC["hub-sync.processor.ts&lt;br/&gt;job consumer"]
+      WH["hub-sync-webhook.controller.ts&lt;br/&gt;endpoint công khai: challenge + HMAC"]
+      subgraph CORE["engine/"]
+        IRC["irConverter.ts&lt;br/&gt;objectValue ⇄ IR ⇄ giá trị hub"]
+        MATCH["matcher.ts&lt;br/&gt;5 bước match ở §5.5"]
+        PLAN["writePlanner.ts&lt;br/&gt;quy tắc §6.2 đọc từ col_map"]
+        ECHO["echoGuard.ts&lt;br/&gt;actor + content-hash"]
+      end
+      subgraph CONN["connectors/"]
+        SSC["smartsheet.ts&lt;br/&gt;REST 2.0 · 300 req/phút"]
+        PIMC["pim.ts&lt;br/&gt;import lô, API sau (D-10)"]
+      end
+    end
+    ATI["modules/jobs/jobs/at-import/&lt;br/&gt;khuôn mẫu tham chiếu"]
+    QF["modules/jobs/fallback/&lt;br/&gt;queue in-memory"]
+    QR["modules/jobs/redis/&lt;br/&gt;queue bền — D-08"]
+    SVC["Internal services&lt;br/&gt;TablesService · ColumnsService&lt;br/&gt;BaseModelSqlv2 bulk"]
+    PG[("PostgreSQL @ Neon&lt;br/&gt;data + meta + schema hub_sync")]
+  end
+
+  CTRL --&gt; PROC
+  WH --&gt; PROC
+  PROC --&gt; SSC &amp; PIMC
+  SSC --&gt; IRC
+  PIMC --&gt; IRC
+  IRC --&gt; MATCH --&gt; PLAN --&gt; SVC --&gt; PG
+  PLAN -- "chiều ra" --&gt; SSC
+  ECHO -. "gác cổng MỌI lệnh ghi" .-&gt; PLAN
+  PROC -.-&gt; QF &amp; QR
+
+  style MOD fill:#e8f4e8,stroke:#2d7d2d
+  style ATI fill:#f0f0f0,stroke:#999,stroke-dasharray: 5 5
+  style QF fill:#fff3cd,stroke:#b8860b</pre></figure>
+<p>Điểm bất đối xứng quan trọng: phía Smartsheet phải đi qua REST công khai <strong>có rate limit</strong>, còn phía hub ghi thẳng vào internal service <strong>không qua REST của chính mình</strong> nên không bị giới hạn bulk 100/10 của API v2/v3.</p>
+<p>Ba module trong thiết kế cũ <strong>không có</strong> ở đây, vì đã kiểm là không cần: <code>hierarchyReplay</code> (sheet này 1 dòng = 1 product), <code>predecessorSync</code> (sheet không bật dependencies), <code>ssReader</code> với cursor <code>rowsModifiedSince</code> được thay bằng <code>sheet.version</code> + cột <code>Modified</code>. Xem Phụ lục C.</p>
+<h3 id="sec-7-2" class="h-anchored"><span class="h-num">7.2</span><a class="h-link" href="#sec-7-2">State store — schema Postgres riêng <code>hub_sync</code></a></h3>
+<p>Đặt ngoài schema của NocoDB để không lẫn vào metadata của tool, và <strong>không hiện trong UI</strong>.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Bảng</th>
+<th>Vai trò</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sync_source</code></td>
+<td>Một dòng cho mỗi hệ nguồn: <code>smartsheet</code>, <code>pim</code>. Thêm hệ thứ ba là thêm dòng</td>
+</tr>
+<tr>
+<td><code>sync_pair</code></td>
+<td>Một dòng cho mỗi cặp (bảng hub × object nguồn). Thêm Project Intake Sheet = thêm <strong>một dòng</strong>, không sửa code</td>
+</tr>
+<tr>
+<td><code>col_map</code></td>
+<td>Ánh xạ cột, kèm chiều ghi và quy tắc ghi của từng field</td>
+</tr>
+<tr>
+<td><code>row_map</code></td>
+<td><code>ss_row_id</code> ↔ hub record id. <strong>Bắt buộc</strong> vì Smartsheet cấp lại rowId khi move/copy</td>
+</tr>
+<tr>
+<td><code>value_map</code></td>
+<td>Từ điển giá trị hai chiều cho team/group/status. <strong>Không</strong> chuẩn hoá bằng lowercase được</td>
+</tr>
+<tr>
+<td><code>drift_report</code></td>
+<td>Lệch cần người quyết (thay cho việc engine tự chọn)</td>
+</tr>
+<tr>
+<td><code>dead_letter</code></td>
+<td>Dòng không map được: trùng alias, thiếu alias, kiểu dữ liệu sai</td>
+</tr>
+<tr>
+<td><code>outbox</code></td>
+<td>Yêu cầu gửi sang PIM để xin alias, có <code>request_uid</code> để idempotent</td>
+</tr>
+</tbody></table></div>
+<p>Hai chỗ đổi tên so với tài liệu cũ, cả hai đều có lý do:</p>
+<ul>
+<li><code>nc_ss_sync</code> → <strong><code>hub_sync</code></strong>: tên cũ mang tên một hệ nguồn, trong khi giờ đã có từ hai nguồn trở lên (vi phạm N4).</li>
+<li><code>disc_map</code> → <strong><code>value_map</code></strong>: <span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> <strong>tên <code>disc_map</code> bị dùng cho hai nghĩa khác nhau trong các tài liệu trước</strong> — vừa là &quot;discussion map&quot; (đồng bộ comment) trong mapping spec, vừa là &quot;từ điển giá trị&quot; trong ghi chú vocab. Đây là bẫy thật, đã gây nhầm khi đọc lại. Bản này gọi rõ là <code>value_map</code>; đồng bộ comment/discussion <strong>không</strong> thuộc phạm vi nên không có bảng cho nó.</li>
+</ul>
+<figure class="diagram"><pre class="mermaid">erDiagram
+  sync_source ||--o{ sync_pair    : "1 nguồn có N pair"
+  sync_pair   ||--o{ col_map      : "N cột"
+  sync_pair   ||--o{ row_map      : "N dòng"
+  sync_pair   ||--o{ drift_report : "lệch chờ người quyết"
+  sync_pair   ||--o{ dead_letter  : "dòng không map được"
+  sync_pair   ||--o{ outbox       : "yêu cầu gửi PIM"
+  sync_source ||--o{ value_map    : "từ điển giá trị theo nguồn"
+
+  sync_source {
+    text id PK "smartsheet / pim"
+    text kind "smartsheet_sheet / pim_export / pim_api"
+    text auth_ref "trỏ tới secret manager, KHÔNG lưu token"
+    text base_url "region-specific với Smartsheet"
+  }
+  sync_pair {
+    text id PK
+    text source_id FK
+    text remote_object_id "sheet id dạng TEXT"
+    text hub_table_id
+    text direction "source_primary / bidirectional / hub_primary / retired"
+    text version_cursor "sheet.version cho change detection"
+    timestamptz modified_since "con trỏ incremental"
+    text webhook_id
+    text webhook_secret_ref
+    text status "active / paused / error"
+  }
+  col_map {
+    text id PK
+    text pair_id FK
+    text remote_column_id "TEXT vì id 16 chữ số"
+    text hub_column
+    text remote_type "TEXT_NUMBER / PICKLIST / MULTI_PICKLIST ..."
+    text hub_uidt
+    text write_direction "read_only / to_hub / to_remote / both"
+    text write_rule "empty_or_placeholder / always / never"
+    bool remote_locked "true cho Athena Product Code và Current Status Date"
+    bool remote_formula "true cho Motion PIC ⇒ không bao giờ ghi"
+    bool lossy "đích không biểu diễn đủ giá trị"
+  }
+  row_map {
+    text id PK
+    text pair_id FK
+    text remote_row_id "ĐỔI khi move/copy ⇒ không tin vĩnh viễn"
+    text hub_record_id
+    text product_alias "khoá nghiệp vụ, bền hơn remote_row_id"
+    timestamptz remote_modified_at
+    timestamptz hub_updated_at
+    text ir_content_hash "chống echo + phát hiện no-op"
+    bool tombstone
+  }
+  value_map {
+    text id PK
+    text source_id FK
+    text field "product_team / product_group / current_status"
+    text hub_value "vocab PIM là canonical"
+    text remote_value "NULL ⇒ hub_only, không ghi sang Smartsheet"
+    bool confirmed_by_pmo "phân biệt khác cách viết vs sai giá trị"
+  }
+  drift_report {
+    text id PK
+    text pair_id FK
+    text product_alias
+    text field
+    text hub_value
+    text remote_value
+    text verdict "pending / hub_wins / remote_wins / not_a_conflict"
+    text exception_group "trỏ tới nhóm A-K của Exceptions Register"
+  }
+  dead_letter {
+    text id PK
+    text pair_id FK
+    jsonb payload
+    text reason "duplicate_alias / missing_alias / bad_type / api_error"
+    text error_code
+    timestamptz created_at
+  }
+  outbox {
+    text id PK
+    text product_alias "NULL khi chưa có alias"
+    text request_uid UK "idempotency key, chống tạo trùng khi retry"
+    text state "draft / pending_alias / aliased / failed"
+    jsonb request_payload
+    jsonb response_payload
+    int attempt_count
+  }</pre></figure>
+<p>Hai điểm thiết kế đáng nói trong ERD trên:</p>
+<ul>
+<li><code>row_map</code> giữ <strong>cả</strong> <code>remote_row_id</code> <strong>và</strong> <code>product_alias</code>. <span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Lý do: Smartsheet cấp lại rowId khi move/copy, nên <code>remote_row_id</code> không bền; <code>product_alias</code> là khoá nghiệp vụ để phục hồi khi rowId đổi.</li>
+<li><code>col_map</code> mang sẵn ba cờ <code>remote_locked</code>, <code>remote_formula</code>, <code>lossy</code>. Nhờ vậy quy tắc ở §6.2 chạy bằng <strong>dữ liệu cấu hình</strong>, không phải câu <code>if</code> chôn trong code — đúng nguyên tắc N4 và N6.</li>
+</ul>
+<h3 id="sec-7-3" class="h-anchored"><span class="h-num">7.3</span><a class="h-link" href="#sec-7-3">Luồng Smartsheet → hub</a></h3>
+<ol>
+<li><strong>Phát hiện thay đổi.</strong> Rẻ nhất: <code>sheet.version</code> tăng sau mỗi thao tác, dùng <code>ifVersionAfter</code>. Cấp dòng thì dùng <code>Modified</code> (MODIFIED_DATE) — <span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> cột này có sẵn, 105/105 dòng.</li>
+<li><strong>Đọc đầy đủ.</strong> Bắt buộc <code>level=2&amp;include=objectValue</code>: <span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> giá trị của MULTI_PICKLIST và MULTI_CONTACT_LIST chỉ nằm trong <code>objectValue</code>.</li>
+<li><strong>Chuyển sang IR</strong> (bản ghi có kiểu, dạng NocoDB v3). Ở bước này: parse contact cả hai định dạng, ép ID về text, nhận giá trị ngoài option.</li>
+<li><strong>Match theo <code>product_alias</code>.</strong> Không match được → <code>dead_letter</code> + view &quot;Cần xử lý&quot;, <strong>không</strong> tạo record.</li>
+<li><strong>Áp quy tắc ghi §6.2</strong> rồi upsert vào hub.</li>
+</ol>
+<figure class="diagram"><pre class="mermaid">sequenceDiagram
+    participant U as PMO (Smartsheet UI)
+    participant SS as Smartsheet
+    participant WH as hub-sync-webhook
+    participant Q as Job queue (1 worker/sheet)
+    participant EG as echoGuard
+    participant IR as irConverter + matcher
+    participant HUB as Internal services → PG
+
+    U-&gt;&gt;SS: sửa ô / thêm dòng
+    Note over SS: debounce ~1 phút, gộp event
+    SS-&gt;&gt;WH: POST callback (skinny — chỉ nói cái gì đổi)
+    WH-&gt;&gt;WH: verify HMAC
+    alt có header Smartsheet-Hook-Challenge
+        WH--&gt;&gt;SS: 200 + echo challenge
+    end
+    WH--&gt;&gt;SS: 200 ACK ngay (né 14 lần retry)
+    WH-&gt;&gt;Q: enqueue(sheetId, events)
+    Q-&gt;&gt;EG: changeAgent là của hub?
+    alt echo từ chính hub
+        EG--&gt;&gt;Q: DROP (lớp 1)
+    else thay đổi thật
+        Q-&gt;&gt;SS: GET sheet với level=2 và include=objectValue
+        SS--&gt;&gt;Q: dòng đầy đủ
+        Q-&gt;&gt;IR: cell → IR (parse contact 2 dạng, ID về TEXT)
+        IR-&gt;&gt;IR: match theo product_alias (5 bước §5.5)
+        alt không map được
+            IR-&gt;&gt;HUB: ghi dead_letter — KHÔNG tạo record
+        else map được
+            IR-&gt;&gt;IR: content-hash trùng hash đã lưu?
+            alt trùng
+                IR--&gt;&gt;Q: NO-OP (lớp 3)
+            else khác
+                IR-&gt;&gt;HUB: áp §6.2 rồi upsert (service account sync@)
+                Note over HUB: field cần người quyết → drift_report
+                Q-&gt;&gt;Q: cập nhật row_map (hash, modified_at) + version_cursor
+            end
+        end
+    end</pre></figure>
+<h3 id="sec-7-4" class="h-anchored"><span class="h-num">7.4</span><a class="h-link" href="#sec-7-4">Luồng hub → Smartsheet</a></h3>
+<p>Chỉ ghi các field mà Smartsheet <strong>vừa biểu diễn được vừa cho phép ghi</strong>. Loại trừ ngay từ cấu hình <code>col_map</code>:</p>
+<ul>
+<li><code>Athena Product Code</code>, <code>Current Status Date</code> — locked với account hiện tại</li>
+<li><code>Motion PIC</code> — có formula cấp cột</li>
+<li><code>Submitter</code>, <code>Submission Date</code>, <code>Modified By</code>, <code>Modified</code> — cột hệ thống</li>
+<li>Giá trị không có option ở đích — bỏ qua, đánh <code>hub_only</code></li>
+</ul>
+<p><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> <strong>Tin tốt về ràng buộc khó nhất của Smartsheet:</strong> sheet này <strong>không bật dependencies</strong> (không có cột kiểu <code>PREDECESSOR</code>, <code>Project Duration (WorkDays)</code> là TEXT_NUMBER chứ không phải DURATION). Nghĩa là ràng buộc &quot;End Date không ghi được khi dòng có predecessor&quot; <strong>không áp dụng</strong>, các cột ngày vẫn ghi được bình thường. Gantt thì có bật (<code>GANTT_START_DATE</code> trên <code>Target Start Date</code>, <code>GANTT_END_DATE</code> trên <code>Current Status Date</code>) nhưng không kéo theo ràng buộc đó.</p>
+<p>Ràng buộc còn lại phải tôn trọng: giới hạn 300 request/phút; ghi nhiều dòng trong một lần gọi thì <strong>mọi dòng phải dùng chung một location specifier</strong>; xoá dòng cha sẽ <strong>cascade</strong> xoá dòng con.</p>
+<figure class="diagram"><pre class="mermaid">sequenceDiagram
+    participant U as PM (NocoDB UI)
+    participant NC as NocoDB core
+    participant P as hub-sync.processor
+    participant EG as echoGuard
+    participant PLAN as writePlanner
+    participant SS as Smartsheet API
+
+    U-&gt;&gt;NC: sửa record
+    NC-&gt;&gt;P: hook v3 records.after.update (rows + previous_rows + actor)
+    P-&gt;&gt;EG: actor là service account sync@?
+    alt echo từ hub
+        EG--&gt;&gt;P: DROP
+    else thay đổi thật của người dùng
+        P-&gt;&gt;PLAN: dựng lệnh ghi theo col_map
+        Note over PLAN: LOẠI ngay: Athena Product Code và&lt;br/&gt;Current Status Date (locked) · Motion PIC (formula) ·&lt;br/&gt;4 cột hệ thống · giá trị không có option ở đích
+        alt không còn field nào được ghi
+            PLAN--&gt;&gt;P: bỏ qua, đánh hub_only
+        else còn field ghi được
+            PLAN-&gt;&gt;SS: PUT rows với allowPartialSuccess=true&lt;br/&gt;+ header Smartsheet-Change-Agent
+            SS--&gt;&gt;PLAN: Result (resultCode 0 hoặc 3, failedItems)
+            alt partial success
+                PLAN-&gt;&gt;PLAN: failedItems → dead_letter, KHÔNG retry mù
+            end
+            PLAN-&gt;&gt;P: cập nhật row_map + hash
+            Note over SS: callback sắp tới mang changeAgent của hub&lt;br/&gt;→ §7.3 tự DROP
+        end
+    end</pre></figure>
+<p>Webhook của Smartsheet khá mong manh nên phải có polling chạy song song — vòng đời và các trạng thái tự tắt:</p>
+<figure class="diagram"><pre class="mermaid">stateDiagram-v2
+    [*] --&gt; NEW_NOT_VERIFIED: POST /webhooks (lưu sharedSecret ngay)
+    NEW_NOT_VERIFIED --&gt; Verifying: PUT enabled=true
+    Verifying --&gt; ENABLED: echo challenge đúng
+    Verifying --&gt; DISABLED_VERIFICATION_FAILED: echo sai hoặc timeout
+    DISABLED_VERIFICATION_FAILED --&gt; Verifying: retry
+
+    ENABLED --&gt; ENABLED: callback + ACK 200&lt;br/&gt;(RE-CHALLENGE mỗi ~100 callback)
+    ENABLED --&gt; DISABLED_CALLBACK_FAILED: thất bại 14 lần retry
+    DISABLED_CALLBACK_FAILED --&gt; Verifying: bật lại + verify lại
+    ENABLED --&gt; DISABLED_EXCEEDED_GRID_LIMITS: sheet vượt 20k dòng&lt;br/&gt;hoặc 400 cột hoặc 500k ô
+    ENABLED --&gt; DISABLED_SCOPE_INACCESSIBLE: mất quyền truy cập sheet
+    DISABLED_SCOPE_INACCESSIBLE --&gt; ENABLED: tự hồi khi có lại quyền
+    ENABLED --&gt; DISABLED_ADMINISTRATIVE: chỉ Smartsheet Support mở lại
+
+    note right of ENABLED
+        LUÔN chạy polling song song:
+        GET sheet version + ifVersionAfter
+        version tăng theo MỌI thao tác
+    end note</pre></figure>
+<blockquote>
+<p>Với sheet 105 dòng hiện tại, giới hạn 20k dòng / 400 cột còn rất xa, nên <code>DISABLED_EXCEEDED_GRID_LIMITS</code> chưa phải rủi ro. Nhưng <code>DISABLED_SCOPE_INACCESSIBLE</code> thì <strong>có thật</strong> vì quyền hiện chỉ là EDITOR (C-01) — nếu PMO thay đổi chia sẻ, webhook tắt im lặng. Đây là lý do polling theo <code>version</code> không phải phương án dự phòng mà là <strong>cơ chế chính</strong>, webhook chỉ để giảm độ trễ.</p>
+</blockquote>
+<h3 id="sec-7-5" class="h-anchored"><span class="h-num">7.5</span><a class="h-link" href="#sec-7-5">Luồng PIM</a></h3>
+<ul>
+<li><strong>Chiều PIM → hub:</strong> một chiều, ghi vào <code>Apps</code> và các field PIM sở hữu trên <code>Products</code>. Hiện chỉ có file export ⇒ giai đoạn đầu là import theo lô; cần API để chạy tự động (D-10).</li>
+<li><strong>Chiều hub → PIM:</strong> chỉ một việc duy nhất — <strong>xin alias cho product mới</strong>, qua bảng <code>outbox</code> với <code>request_uid</code> để không tạo trùng khi retry. Máy trạng thái: <code>draft → pending_alias → aliased → synced</code>. <span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Khớp charter §5.3 và EX-001.</li>
+</ul>
+<h3 id="sec-7-6" class="h-anchored"><span class="h-num">7.6</span><a class="h-link" href="#sec-7-6">Chống vòng lặp echo — bắt buộc, không phải tuỳ chọn</a></h3>
+<p><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Bằng chứng: cột <code>Submitter</code> cho thấy sheet <strong>đã có nhiều tác nhân tự động ghi vào</strong>: <code>web-form@smartsheet.com</code>, <code>cell-link@smartsheet.com</code>, <code>automation@smartsheet.com</code>, <code>admin@athena.tools</code>. Hub không phải writer duy nhất.</p>
+<p>Ba lớp bảo vệ:</p>
+<ol>
+<li><strong>Chiều hub → SS:</strong> gắn header <code>Smartsheet-Change-Agent</code> cho mọi request; webhook mang lại giá trị đó thì bỏ qua.</li>
+<li><strong>Chiều SS → hub:</strong> ghi bằng service account riêng; thay đổi do chính account đó tạo ra thì không phát sinh push ngược.</li>
+<li><strong>Chốt cuối:</strong> so <strong>content-hash của IR</strong> trước khi ghi. Nội dung không đổi thì không ghi, kể cả khi có event. Lớp này chặn cả trường hợp hai lớp trên bị hụt.</li>
+</ol>
+<figure class="diagram"><pre class="mermaid">flowchart TB
+  subgraph LOOP["Vòng lặp tiềm ẩn"]
+    direction LR
+    A["Hub ghi vào Smartsheet"] --&gt; B["Smartsheet bắn webhook"]
+    B --&gt; C["Hub ghi vào chính nó"]
+    C --&gt; D["NocoDB bắn hook v3"]
+    D --&gt; A
+  end
+
+  B --&gt; G1{"changeAgent&lt;br/&gt;là của hub?"}
+  G1 -- có --&gt; X1["✂️ DROP&lt;br/&gt;lớp 1: header Smartsheet-Change-Agent"]
+  G1 -- không --&gt; OK1["Xử lý — thay đổi thật từ PMO"]
+
+  D --&gt; G2{"actor là service&lt;br/&gt;account sync@?"}
+  G2 -- có --&gt; X2["✂️ DROP&lt;br/&gt;lớp 2: actor trong hook v3"]
+  G2 -- không --&gt; G3{"content-hash của IR&lt;br/&gt;trùng hash đã lưu?"}
+  G3 -- có --&gt; X3["✂️ NO-OP&lt;br/&gt;lớp 3: hash — lưới an toàn khi actor null"]
+  G3 -- không --&gt; OK2["Xử lý — thay đổi thật từ PM"]
+
+  OTHER["web-form@ · cell-link@ ·&lt;br/&gt;automation@ · admin@athena.tools"] --&gt; G1
+
+  style X1 fill:#fdd,stroke:#c33
+  style X2 fill:#fdd,stroke:#c33
+  style X3 fill:#fdd,stroke:#c33
+  style OK1 fill:#dfd,stroke:#2d7d2d
+  style OK2 fill:#dfd,stroke:#2d7d2d
+  style OTHER fill:#fff3cd,stroke:#b8860b</pre></figure>
+<p>Khối màu vàng là điểm khác biệt so với thiết kế cũ: <span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> cột <code>Submitter</code> chứng minh <strong>đã có bốn tác nhân tự động khác</strong> ghi vào sheet này. Chúng <strong>không</strong> mang <code>changeAgent</code> của hub nên sẽ đi vào nhánh &quot;thay đổi thật&quot; — đúng như mong muốn, nhưng nghĩa là lớp 3 (content-hash) phải luôn bật, vì lưu lượng event thật sẽ cao hơn dự kiến ban đầu.</p>
+<p><span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> Lớp 2 phụ thuộc việc payload webhook v3 của NocoDB có mang <code>actor</code>. Theo ghi chú kỹ thuật trước đây thì fork cần <strong>patch nhỏ</strong> để thêm <code>actor {id, email}</code> vào payload. Chưa kiểm lại trong session này ⇒ coi là <strong>việc cần xác nhận ở M1</strong>, và nếu không patch được thì lớp 3 gánh thay (chấp nhận được, chỉ tốn thêm một lần đọc để tính hash).</p>
+<h3 id="sec-7-7" class="h-anchored"><span class="h-num">7.7</span><a class="h-link" href="#sec-7-7">Deployment view</a></h3>
+<figure class="diagram"><pre class="mermaid">flowchart TB
+  subgraph INET["Internet"]
+    SSCLOUD["Smartsheet Cloud&lt;br/&gt;callback HTTPS · cert thật bắt buộc&lt;br/&gt;KHÔNG nhận private IP hay self-signed"]
+    USERS["PMO · PM (browser)"]
+  end
+
+  subgraph GCP["GCP — GCE VM athena-server"]
+    CADDY["Caddy · TLS termination&lt;br/&gt;/api/* → backend&lt;br/&gt;/hub-sync/webhook → backend (công khai)"]
+    subgraph DOCKER["docker-compose"]
+      BE["NocoDB fork backend&lt;br/&gt;+ module hub-sync&lt;br/&gt;NC_DISABLE_AUDIT: KHÔNG set"]
+      REDIS["Redis — queue bền (D-08)"]
+    end
+  end
+
+  subgraph NEON["Neon — managed Postgres"]
+    META[("nc meta + data")]
+    SYNCDB[("schema hub_sync&lt;br/&gt;8 bảng state store")]
+  end
+
+  SECRETS["Secret manager&lt;br/&gt;Smartsheet token (theo region)&lt;br/&gt;+ webhook sharedSecret&lt;br/&gt;+ credential PIM"]
+
+  USERS --&gt; CADDY
+  SSCLOUD -- "callback + challenge" --&gt; CADDY
+  CADDY --&gt; BE
+  BE &lt;--&gt; REDIS
+  BE &lt;--&gt; META &amp; SYNCDB
+  BE -- "REST 2.0 · 300 req/phút" --&gt; SSCLOUD
+  BE -- "import lô, API sau (D-10)" --&gt; PIMSYS["PIM"]
+  SECRETS -.-&gt; BE
+
+  style REDIS fill:#fff3cd,stroke:#b8860b</pre></figure>
+<p>Hai điểm hạ tầng phải xử lý trước khi bật webhook:</p>
+<ul>
+<li>Callback URL của Smartsheet <strong>không nhận private IP hoặc cert tự ký</strong> ⇒ bắt buộc domain công khai + cert thật (Caddy tự lo). Token Smartsheet cũng theo region — công ty dùng Commercial (<code>api.smartsheet.com</code>).</li>
+<li><span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> <strong><code>NODE_TLS_REJECT_UNAUTHORIZED=0</code> đang có trong cấu hình production</strong> tắt kiểm TLS <strong>toàn process</strong>, nên nó ảnh hưởng cả kết nối ra Smartsheet và PIM, không chỉ Neon. Phải bỏ và thay bằng CA bundle riêng cho Neon → <strong>D-12</strong>.</li>
+</ul>
+<hr>
+<h2 id="sec-8" class="h-anchored"><span class="h-num">8</span><a class="h-link" href="#sec-8">Ràng buộc cứng đã verify</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Ràng buộc</th>
+<th>Bằng chứng</th>
+<th>Ảnh hưởng</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>C-01</td>
+<td>Account tích hợp chỉ <code>EDITOR</code> trên GOV-PMO</td>
+<td><code>get_sheet_path</code> trả <code>accessLevel: EDITOR</code></td>
+<td>Không ghi được 2 cột locked, không đổi được option</td>
+</tr>
+<tr>
+<td>C-02</td>
+<td>60 sheet tracking con không truy cập được</td>
+<td>calibration <code>2251</code> vs <code>1006</code></td>
+<td>Ngoài phạm vi giai đoạn này, nhưng cần biết khi mở rộng</td>
+</tr>
+<tr>
+<td>C-03</td>
+<td><code>Product Alias</code> không locked, không validation</td>
+<td><code>get_columns</code></td>
+<td>Smartsheet <strong>không thể</strong> enforce unique ⇒ chỉ hub làm được</td>
+</tr>
+<tr>
+<td>C-04</td>
+<td>Cột có formula thì API không ghi được</td>
+<td><code>Motion PIC</code> có <code>formula</code></td>
+<td>Loại khỏi <code>col_map</code></td>
+</tr>
+<tr>
+<td>C-05</td>
+<td>MULTI_* chỉ có giá trị trong <code>objectValue</code></td>
+<td>Smartsheet API</td>
+<td>Phải <code>level=2&amp;include=objectValue</code></td>
+</tr>
+<tr>
+<td>C-06</td>
+<td>Smartsheet cấp lại <code>rowId</code> khi move/copy</td>
+<td>Smartsheet API</td>
+<td>Bắt buộc có <code>row_map</code></td>
+</tr>
+<tr>
+<td>C-07</td>
+<td>ID Smartsheet trả về dạng float, 16 chữ số</td>
+<td><code>&quot;8090089767784324.0&quot;</code>, <code>&quot;379.0&quot;</code></td>
+<td>Lưu TEXT, không parse thành number</td>
+</tr>
+<tr>
+<td>C-08</td>
+<td>Job in-memory nếu không có Redis</td>
+<td><code>modules/jobs/fallback/</code> trong repo</td>
+<td>D-08</td>
+</tr>
+<tr>
+<td>C-09</td>
+<td><code>validation: true</code> <strong>không</strong> bảo đảm dữ liệu cũ nằm trong option</td>
+<td><code>Complete</code>, <code>OutsourceDev</code>, <code>Joyplanet</code>, <code>Default</code>, 6/7 <code>Sub-genre</code></td>
+<td>Read-side phải nhận giá trị lạ</td>
+</tr>
+<tr>
+<td>C-10</td>
+<td>Sheet không bật dependencies</td>
+<td>không có cột <code>PREDECESSOR</code></td>
+<td><strong>Thuận lợi</strong> — ngày vẫn ghi được</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="sec-9" class="h-anchored"><span class="h-num">9</span><a class="h-link" href="#sec-9">Cổng chất lượng dữ liệu</a></h2>
+<p>Toàn bộ ngoại lệ nằm ở <code>PJ185_Data_Exceptions_Register.md</code> (11 nhóm A–K). Tóm tắt điều kiện để bật sync:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Cổng</th>
+<th>Điều kiện</th>
+<th>Chặn milestone</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>G1</td>
+<td>4 cặp trùng alias đã dọn ⇒ áp được <code>UNIQUE(product_alias)</code></td>
+<td>M4</td>
+</tr>
+<tr>
+<td>G2</td>
+<td>Dòng tiêu đề bị paste đã xoá</td>
+<td>M1</td>
+</tr>
+<tr>
+<td>G3</td>
+<td>6 case lệch <code>product_code</code> ở nhóm C đã có phán quyết PM/CTO</td>
+<td>M4</td>
+</tr>
+<tr>
+<td>G4</td>
+<td>Quy tắc ghi tên (nhóm E) đã được PM chốt</td>
+<td>M4</td>
+</tr>
+<tr>
+<td>G5</td>
+<td>Đã hỏi chủ PIM về field owner/PM (nhóm J)</td>
+<td>M1</td>
+</tr>
+<tr>
+<td>G6</td>
+<td>Danh sách option <code>Sub-genre</code> đã làm lại</td>
+<td>M4 (có thể hoãn: model là text)</td>
+</tr>
+</tbody></table></div>
+<p><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Ba việc dọn có tác động lớn nhất mà chi phí gần bằng không:</p>
+<ol>
+<li>Sửa <code>PD277</code> → <code>PD227</code> cho dòng <code>animal_rolling</code> — <strong>một ô</strong>. Bằng chứng: PIM có <code>animal_rolling</code> = <code>PD227</code> (<em>Animal Rolling</em>, team <code>Delta - I</code>), còn <code>PD277</code> bên PIM đúng là <code>prototype20</code>.</li>
+<li>Xoá dòng tiêu đề bị paste — <strong>một dòng</strong>.</li>
+<li>Gộp <code>PD324</code> và <code>PD328</code> — mỗi cặp hai dòng nhưng <strong>cùng <code>Sheet ID</code></strong>, tức chắc chắn là nhập trùng.</li>
+</ol>
+<hr>
+<h2 id="sec-10" class="h-anchored"><span class="h-num">10</span><a class="h-link" href="#sec-10">Quyết định cần ký</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Quyết định</th>
+<th>Ai</th>
+<th>Mặc định nếu không có phản hồi</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>D-01</strong></td>
+<td><code>Product Stage</code> là &quot;các stage đã đi qua&quot; hay &quot;stage hiện tại&quot;?</td>
+<td>PMO</td>
+<td><span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> Giả định &quot;đã đi qua&quot;, model là multi-select riêng, không gộp</td>
+</tr>
+<tr>
+<td><strong>D-02</strong></td>
+<td>Hub là siêu tập, không ghi giá trị Smartsheet không biểu diễn được (N1) — xác nhận</td>
+<td>CTO + PMO</td>
+<td>Áp dụng N1</td>
+</tr>
+<tr>
+<td><strong>D-03</strong></td>
+<td>Quy tắc ghi §6.2 (chỉ ghi khi đích rỗng/placeholder) — xác nhận</td>
+<td>PM</td>
+<td>Áp dụng</td>
+</tr>
+<tr>
+<td><strong>D-04</strong></td>
+<td>Tên bảng <code>Products</code>, <code>Apps</code>, <code>Teams</code>, <code>Groups</code>; chừa chỗ <code>Projects</code> ngang hàng</td>
+<td>CTO</td>
+<td>Áp dụng</td>
+</tr>
+<tr>
+<td><strong>D-05</strong></td>
+<td>Giữ định danh phẳng, không tách <code>ProductIdentifiers</code></td>
+<td>Technical Owner</td>
+<td>Giữ phẳng</td>
+</tr>
+<tr>
+<td><strong>D-06</strong></td>
+<td>6 case lệch code (nhóm C): cùng game đổi tên, hay hai game trùng alias? Ưu tiên <code>PD307</code>, <code>PD326</code>, <code>PD256</code></td>
+<td>PM + CTO</td>
+<td><code>dead_letter</code>, không ghi đè</td>
+</tr>
+<tr>
+<td><strong>D-07</strong></td>
+<td>Model đủ mọi field kể cả cột rỗng 0/105 — xác nhận</td>
+<td>PM</td>
+<td>Model đủ</td>
+</tr>
+<tr>
+<td><strong>D-08</strong></td>
+<td>Có bật Redis (<code>NC_REDIS_URL</code>) cho queue không? Không bật thì job mất khi restart</td>
+<td>CTO + Platform</td>
+<td>Bật Redis trước M4</td>
+</tr>
+<tr>
+<td><strong>D-09</strong></td>
+<td>PIM có field owner/product manager mà export chưa lấy ra? Charter nói PIM sở hữu &quot;UA-related fields&quot; nhưng export không có field UA nào</td>
+<td>Technical Owner + chủ PIM</td>
+<td>Coi như không có; <code>project_manager</code> một nguồn</td>
+</tr>
+<tr>
+<td><strong>D-10</strong></td>
+<td>PIM có API để đọc/ghi tự động, hay giai đoạn đầu chấp nhận import theo lô từ export?</td>
+<td>CTO + chủ PIM</td>
+<td>Import theo lô ở M1, API là điều kiện của M3</td>
+</tr>
+<tr>
+<td><strong>D-11</strong></td>
+<td>Có xin ADMIN trên GOV-PMO không? (Không xin vẫn chạy được nhờ N1, nhưng <code>product_code</code> sẽ không bao giờ đẩy sang SS)</td>
+<td>CTO</td>
+<td>Không xin ở phase 1</td>
+</tr>
+<tr>
+<td><strong>D-12</strong></td>
+<td><code>NODE_TLS_REJECT_UNAUTHORIZED=0</code> đang có trong cấu hình production tắt kiểm TLS <strong>toàn process</strong>, ảnh hưởng cả kết nối ra Smartsheet/PIM</td>
+<td>CTO</td>
+<td>Bỏ, dùng CA bundle riêng cho Neon</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="sec-11" class="h-anchored"><span class="h-num">11</span><a class="h-link" href="#sec-11">Lộ trình theo milestone charter</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Milestone charter</th>
+<th>Hạn</th>
+<th>Việc kỹ thuật</th>
+<th>Điều kiện vào</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>M1</strong> Database &amp; Data Model</td>
+<td>09-09</td>
+<td>Dựng <code>Products</code>/<code>Apps</code>/<code>Teams</code>/<code>Groups</code> trên Neon; migration <code>hub_sync</code>; seed <code>disc_map</code>; import theo lô từ export PIM; sinh <code>drift_report</code> đầu tiên</td>
+<td>G2, G5</td>
+</tr>
+<tr>
+<td><strong>M2</strong> Infrastructure</td>
+<td>09-16</td>
+<td>NocoDB self-host GCP + Neon; secret management; Redis (D-08); sửa D-12</td>
+<td>M1 xong</td>
+</tr>
+<tr>
+<td><strong>M3</strong> PIM Integration</td>
+<td>09-30</td>
+<td><code>outbox</code> + máy trạng thái alias; connector PIM</td>
+<td><strong>D-10</strong> — phụ thuộc người ngoài team</td>
+</tr>
+<tr>
+<td><strong>M4</strong> Smartsheet Integration</td>
+<td>10-07</td>
+<td>Connector Smartsheet hai chiều; webhook + echo-guard 3 lớp; <code>row_map</code></td>
+<td>G1, G3, G4</td>
+</tr>
+<tr>
+<td><strong>M5</strong> Pilot</td>
+<td>10-14</td>
+<td>Ba use case charter §9</td>
+<td>M3 + M4</td>
+</tr>
+<tr>
+<td><strong>M6</strong> Đánh giá</td>
+<td>10-21</td>
+<td>Báo cáo, đề xuất phase sau</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>Đề xuất điều chỉnh lịch:</strong> M4 (Smartsheet) <strong>không</strong> phụ thuộc M3 (PIM), mà M3 lại bị chặn bởi người ngoài team (D-10). Nên chạy M4 <strong>song song từ tuần 1</strong> thay vì chờ M3. Nếu trễ, áp dụng contingency charter §11: rút gọn phạm vi pilot chứ không dời go-live.</p>
+</blockquote>
+<p><strong>Bốn cần gạt giảm phạm vi</strong>, dùng theo thứ tự này nếu thiếu thời gian:</p>
+<ol>
+<li>Bỏ chiều hub → Smartsheet, chỉ đọc một chiều + <code>drift_report</code> (vẫn đạt use case 2 và 3 của charter).</li>
+<li>Bỏ webhook, chạy poll theo <code>sheet.version</code> mỗi 15 phút.</li>
+<li>Bỏ <code>outbox</code> PIM, PM nhập alias tay ở giai đoạn pilot.</li>
+<li>Giới hạn số field đồng bộ xuống 9 field giao nhau ở §6.1.</li>
+</ol>
+<h3 id="sec-11-1" class="h-anchored"><span class="h-num">11.1</span><a class="h-link" href="#sec-11-1">Pipeline khởi tạo lần đầu</a></h3>
+<p>Job nhiều pha, <strong>resume được</strong> theo mẫu <code>at-import</code>. Điểm khác biệt lớn nhất so với thiết kế cũ: có hai pha con người ở giữa (P4, P5), vì cổng chất lượng dữ liệu ở §9 phải đóng trước khi bật đồng bộ tự động.</p>
+<figure class="diagram"><pre class="mermaid">flowchart LR
+  P0["0 · Provision&lt;br/&gt;sync_source + sync_pair&lt;br/&gt;seed value_map từ&lt;br/&gt;vocab PIM"]
+  P1["1 · Schema&lt;br/&gt;tạo Products / Apps /&lt;br/&gt;Teams / Groups&lt;br/&gt;+ col_map 44 cột"]
+  P2["2 · Import PIM&lt;br/&gt;390 app → Apps&lt;br/&gt;272 product → field&lt;br/&gt;PIM sở hữu"]
+  P3["3 · Đọc Smartsheet&lt;br/&gt;105 dòng → IR →&lt;br/&gt;match theo alias →&lt;br/&gt;upsert + row_map"]
+  P4["4 · 🧑 drift_report&lt;br/&gt;đầu tiên&lt;br/&gt;PMO đối chiếu với&lt;br/&gt;Exceptions Register"]
+  P5["5 · 🧑 Dọn dữ liệu&lt;br/&gt;cổng G1–G4&lt;br/&gt;rồi áp UNIQUE&lt;br/&gt;trên product_alias"]
+  P6["6 · Cutover&lt;br/&gt;bật webhook +&lt;br/&gt;lưu version cursor&lt;br/&gt;→ chế độ incremental"]
+
+  P0 --&gt; P1 --&gt; P2 --&gt; P3 --&gt; P4 --&gt; P5 --&gt; P6
+
+  style P0 fill:#e8f0fe,stroke:#3367d6
+  style P4 fill:#fff3cd,stroke:#b8860b
+  style P5 fill:#fff3cd,stroke:#b8860b
+  style P6 fill:#dfd,stroke:#2d7d2d</pre></figure>
+<p>Về quy mô: 105 dòng Smartsheet và 390 dòng app là <strong>rất nhỏ</strong> — P2 và P3 chỉ mất vài giây, không phải hàng giờ. Nút chặn thực sự của lộ trình là P4 và P5, tức thời gian PMO ra quyết định, chứ không phải hiệu năng. Đây là lý do §9 xếp ba việc dọn &quot;chi phí gần bằng không&quot; lên đầu.</p>
+<h3 id="sec-11-2" class="h-anchored"><span class="h-num">11.2</span><a class="h-link" href="#sec-11-2">Máy trạng thái chiều đồng bộ</a></h3>
+<p>Mỗi <code>sync_pair</code> có chiều riêng, và chiều được đổi bằng <strong>cấu hình</strong>, không phải deploy lại. Charter là dự án migration nên pair Smartsheet sẽ đi dần từ trái sang phải; pair PIM thì <strong>luôn</strong> ở <code>source_primary</code> (một chiều) trừ đường <code>outbox</code> xin alias.</p>
+<figure class="diagram"><pre class="mermaid">stateDiagram-v2
+    [*] --&gt; Source_Primary: pipeline §11.1 xong
+
+    Source_Primary: 🪞 source_primary
+    Source_Primary: Smartsheet là nguồn sự thật
+    Source_Primary: hub chỉ đọc, xuất drift_report
+    Source_Primary: KHÔNG ghi ngược — dùng cho pilot
+
+    Bidirectional: ⇄ bidirectional
+    Bidirectional: hai chiều theo §6.2
+    Bidirectional: xung đột thật vào drift_report
+    Bidirectional: engine KHÔNG tự chọn bên thắng
+
+    Hub_Primary: 🏠 hub_primary
+    Hub_Primary: NocoDB là nguồn sự thật
+    Hub_Primary: Smartsheet là bản soi cho người chưa chuyển
+
+    Retired: 🔚 retired
+    Retired: tắt webhook, archive sheet
+
+    Source_Primary --&gt; Bidirectional: cổng G1–G4 đã đóng&lt;br/&gt;+ PMO chấp nhận drift_report
+    Bidirectional --&gt; Hub_Primary: cutover khi đa số dùng NocoDB
+    Hub_Primary --&gt; Retired: bỏ hẳn Smartsheet
+    Bidirectional --&gt; Source_Primary: rollback (một dòng cấu hình)
+    Hub_Primary --&gt; Bidirectional: rollback</pre></figure>
+<p><strong>Đề xuất cho pilot (charter M5):</strong> dừng ở <code>source_primary</code>. Nó đủ cho use case 2 và 3 của charter §9 (tra cứu product, tra cứu signal) mà <strong>không có rủi ro ghi sai vào Smartsheet</strong> — trùng với cần gạt giảm phạm vi số 1 ở trên. Chỉ mở <code>bidirectional</code> sau khi PMO đã xử lý xong Exceptions Register.</p>
+<hr>
+<h2 id="sec-12" class="h-anchored"><span class="h-num">12</span><a class="h-link" href="#sec-12">Kế hoạch kiểm thử</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Lớp</th>
+<th>Nội dung</th>
+<th>Cách xác minh</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Unit — golden</td>
+<td><code>irConverter</code> chuyển 44 cột Smartsheet sang IR</td>
+<td>Fixture lấy từ chính probe P1, gồm <strong>cả dòng rác</strong>: <code>PD379</code> code <code>&quot;379.0&quot;</code>, <code>PD289</code> ngày <code>2239-02-07</code>, <code>&quot;24d&quot;</code> trong cột DATE, <code>Atilla Kabakcıoğlu</code> không phải email, <code>Minh Lam &lt;email&gt;</code></td>
+</tr>
+<tr>
+<td>Unit — matcher</td>
+<td>5 bước match §5.5</td>
+<td>Phải nhận đúng 82/96, và <strong>không</strong> báo trùng cho 6 case nhóm C</td>
+</tr>
+<tr>
+<td>Unit — write rule</td>
+<td>§6.2</td>
+<td>Phải <strong>từ chối</strong> cả 10 dòng nhóm E; phải cho qua 24 dòng cải thiện</td>
+</tr>
+<tr>
+<td>Unit — vocab</td>
+<td><code>disc_map</code></td>
+<td><code>Starship - I</code> → <code>StarShip</code>; <code>Thynkout</code> → NULL (hub_only, không ghi)</td>
+</tr>
+<tr>
+<td>Integration</td>
+<td>Chống echo</td>
+<td>Ghi từ hub → nhận webhook → <strong>không</strong> phát sinh vòng thứ hai</td>
+</tr>
+<tr>
+<td>Integration</td>
+<td><code>row_map</code> sống sót move/copy</td>
+<td>Move dòng trên Smartsheet, rowId đổi, hub vẫn map đúng</td>
+</tr>
+<tr>
+<td>Integration</td>
+<td>Cột locked</td>
+<td>Thử ghi <code>Athena Product Code</code> → phải bị từ chối <strong>có kiểm soát</strong>, ghi <code>drift_report</code>, không làm job chết</td>
+</tr>
+<tr>
+<td>E2E</td>
+<td>Ba use case charter §9</td>
+<td>Trên bản pilot với dữ liệu thật</td>
+</tr>
+<tr>
+<td>Hồi quy dữ liệu</td>
+<td>Không mất dữ liệu</td>
+<td>Sau full sync, đếm lại 105 dòng / 95 alias / 272 product; so <code>drift_report</code> với Exceptions Register</td>
+</tr>
+</tbody></table></div>
+<p>Ngưỡng coverage theo chuẩn dự án: <strong>≥80%</strong> cho <code>engine/</code>.</p>
+<hr>
+<h2 id="sec-13" class="h-anchored"><span class="h-num">13</span><a class="h-link" href="#sec-13">Rủi ro bổ sung so với charter §13</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Rủi ro</th>
+<th>Xác suất</th>
+<th>Ảnh hưởng</th>
+<th>Giảm thiểu</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>T-01</td>
+<td>Ghi đè tên thật bằng placeholder khi đẩy <code>product_name</code></td>
+<td>Cao nếu không có §6.2</td>
+<td>Mất dữ liệu, PMO mất niềm tin</td>
+<td>Quy tắc N5 + test bắt buộc 10 dòng nhóm E</td>
+</tr>
+<tr>
+<td>T-02</td>
+<td>Gộp bốn field vòng đời thành một</td>
+<td>Trung bình</td>
+<td>Mất dữ liệu stage cấp app của 37 product</td>
+<td>Bảng <code>Apps</code> + D-01</td>
+</tr>
+<tr>
+<td>T-03</td>
+<td>Vòng lặp echo với web-form/cell-link/automation đang có</td>
+<td>Trung bình</td>
+<td>Ghi lặp, tốn quota</td>
+<td>Echo-guard 3 lớp §7.6</td>
+</tr>
+<tr>
+<td>T-04</td>
+<td>ID Smartsheet mất chính xác khi parse thành số</td>
+<td>Thấp nhưng âm thầm</td>
+<td>Sai liên kết sheet</td>
+<td>Lưu TEXT (C-07)</td>
+</tr>
+<tr>
+<td>T-05</td>
+<td>Job mất khi restart vì không có Redis</td>
+<td>Trung bình</td>
+<td>Sync dở dang, khó truy vết</td>
+<td>D-08</td>
+</tr>
+<tr>
+<td>T-06</td>
+<td>M3 bị chặn bởi bên thứ ba (chủ PIM)</td>
+<td>Trung bình - Cao</td>
+<td>Trễ M4, M5</td>
+<td>Chạy M4 song song từ tuần 1</td>
+</tr>
+<tr>
+<td>T-07</td>
+<td>Coi <code>created_by</code> của PIM là project manager</td>
+<td>—</td>
+<td>Đã tránh được nhờ đo</td>
+<td>Ghi rõ ở §6.1</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="sec-pl-a" class="h-anchored"><span class="h-num">PL A</span><a class="h-link" href="#sec-pl-a">44 cột Smartsheet, fill-rate đo trên 105 dòng</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Cột</th>
+<th>Kiểu</th>
+<th>Fill</th>
+<th>Ghi chú đáng lưu ý</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0</td>
+<td>Product Alias</td>
+<td>TEXT_NUMBER</td>
+<td>99</td>
+<td>Không locked, không validation</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Athena Product Code</td>
+<td>TEXT_NUMBER</td>
+<td>105</td>
+<td><strong>locked</strong> · <code>PD379</code> = <code>&quot;379.0&quot;</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td>Game Name</td>
+<td>TEXT_NUMBER</td>
+<td>104</td>
+<td>Primary · trùng code ở 51 dòng</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Sheet ID</td>
+<td>TEXT_NUMBER</td>
+<td><strong>60</strong></td>
+<td>Sheet con, không có quyền đọc</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Product Team</td>
+<td>PICKLIST</td>
+<td>104</td>
+<td>3 giá trị ngoài option</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Project Manager</td>
+<td>CONTACT</td>
+<td>92</td>
+<td><code>PD347</code> là tên người</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Product Stage</td>
+<td>MULTI_PICKLIST</td>
+<td><strong>34</strong></td>
+<td>Khác nghĩa PIM <code>stage</code></td>
+</tr>
+<tr>
+<td>7</td>
+<td>Request Type</td>
+<td>PICKLIST</td>
+<td>34</td>
+<td>Còn 2 option</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Target Start Date</td>
+<td>DATE</td>
+<td>~60</td>
+<td>GANTT_START_DATE</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Project Duration (WorkDays)</td>
+<td>TEXT_NUMBER</td>
+<td>~55</td>
+<td>Không phải DURATION ⇒ dependencies tắt</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Game Project Approver</td>
+<td>CONTACT</td>
+<td>~60</td>
+<td><strong>Toàn bộ = luke@</strong></td>
+</tr>
+<tr>
+<td>11</td>
+<td>Project Approval Status</td>
+<td>PICKLIST</td>
+<td>~100</td>
+<td>1 dòng <code>Declined</code></td>
+</tr>
+<tr>
+<td>12</td>
+<td>Game Sponsor</td>
+<td>MULTI_CONTACT</td>
+<td>~35</td>
+<td>Trộn định dạng</td>
+</tr>
+<tr>
+<td>13</td>
+<td>Current Project Status</td>
+<td>PICKLIST</td>
+<td><strong>103</strong></td>
+<td><code>Complete</code> ×2 ngoài option</td>
+</tr>
+<tr>
+<td>14</td>
+<td>Current Status Date</td>
+<td>DATE</td>
+<td>~55</td>
+<td><strong>locked</strong> · GANTT_END_DATE</td>
+</tr>
+<tr>
+<td>15</td>
+<td>Game Genre</td>
+<td>PICKLIST</td>
+<td>~70</td>
+<td>typo <code>Stategy</code></td>
+</tr>
+<tr>
+<td>16</td>
+<td>Sub-genre</td>
+<td>PICKLIST</td>
+<td>~12</td>
+<td><strong>6/7 giá trị ngoài option</strong></td>
+</tr>
+<tr>
+<td>17</td>
+<td>Product Owner</td>
+<td>CONTACT</td>
+<td>48</td>
+<td><code>stud**d**io</code> typo</td>
+</tr>
+<tr>
+<td>18</td>
+<td>Team Composition</td>
+<td>TEXT_NUMBER</td>
+<td>~55</td>
+<td>Văn bản tự do</td>
+</tr>
+<tr>
+<td>19</td>
+<td>OPC Link</td>
+<td>TEXT_NUMBER</td>
+<td>~35</td>
+<td><strong>9 dòng chứa ngày</strong></td>
+</tr>
+<tr>
+<td>20</td>
+<td>Actual Start Date</td>
+<td>DATE</td>
+<td>~85</td>
+<td>Không suy từ kick_off_date</td>
+</tr>
+<tr>
+<td>21</td>
+<td>Actual End Date</td>
+<td>DATE</td>
+<td>~80</td>
+<td><code>2239-02-07</code>, <code>&quot;24d&quot;</code></td>
+</tr>
+<tr>
+<td>22</td>
+<td>Dashboard Link</td>
+<td>TEXT_NUMBER</td>
+<td>~60</td>
+<td>Trộn 3 loại URL</td>
+</tr>
+<tr>
+<td>23</td>
+<td>Schedule At Risk</td>
+<td>PICKLIST RYG</td>
+<td><strong>4</strong></td>
+<td></td>
+</tr>
+<tr>
+<td>24</td>
+<td>Submitter</td>
+<td>CREATED_BY</td>
+<td>105</td>
+<td>web-form / cell-link / automation</td>
+</tr>
+<tr>
+<td>25</td>
+<td>Submission Date</td>
+<td>CREATED_DATE</td>
+<td>105</td>
+<td></td>
+</tr>
+<tr>
+<td>26</td>
+<td>Product Group</td>
+<td>PICKLIST</td>
+<td>63</td>
+<td>5 option · <code>Joyplanet</code></td>
+</tr>
+<tr>
+<td>27</td>
+<td>Studio</td>
+<td>PICKLIST</td>
+<td><strong>0</strong></td>
+<td></td>
+</tr>
+<tr>
+<td>28</td>
+<td>Project Budgeting File</td>
+<td>TEXT_NUMBER</td>
+<td>~40</td>
+<td></td>
+</tr>
+<tr>
+<td>29</td>
+<td>Project Cost Variant</td>
+<td>TEXT_NUMBER</td>
+<td>~45</td>
+<td>Là <strong>tỉ lệ</strong> 0.1–0.3</td>
+</tr>
+<tr>
+<td>30</td>
+<td>Project Cost Baseline ($)</td>
+<td>TEXT_NUMBER</td>
+<td>~50</td>
+<td></td>
+</tr>
+<tr>
+<td>31</td>
+<td>PMO PIC</td>
+<td>MULTI_CONTACT</td>
+<td>~50</td>
+<td>Trộn định dạng</td>
+</tr>
+<tr>
+<td>32</td>
+<td>Project Type</td>
+<td>PICKLIST</td>
+<td><strong>0</strong></td>
+<td></td>
+</tr>
+<tr>
+<td>33</td>
+<td>Motion PIC</td>
+<td>TEXT_NUMBER</td>
+<td>105</td>
+<td><strong>Formula hằng số</strong></td>
+</tr>
+<tr>
+<td>34</td>
+<td>Target Go Live Date</td>
+<td>DATE</td>
+<td><strong>1</strong></td>
+<td></td>
+</tr>
+<tr>
+<td>35</td>
+<td>Signal PIC</td>
+<td>CONTACT</td>
+<td><strong>0</strong></td>
+<td></td>
+</tr>
+<tr>
+<td>36</td>
+<td>Signal Validation Proof</td>
+<td>TEXT_NUMBER</td>
+<td><strong>0</strong></td>
+<td></td>
+</tr>
+<tr>
+<td>37</td>
+<td>Modified By</td>
+<td>MODIFIED_BY</td>
+<td>105</td>
+<td>Delta detection</td>
+</tr>
+<tr>
+<td>38</td>
+<td>Modified</td>
+<td>MODIFIED_DATE</td>
+<td>105</td>
+<td>Delta detection</td>
+</tr>
+<tr>
+<td>39</td>
+<td>SignalCode</td>
+<td>TEXT_NUMBER</td>
+<td><strong>4</strong></td>
+<td></td>
+</tr>
+<tr>
+<td>40</td>
+<td>Kick-off</td>
+<td>TEXT_NUMBER</td>
+<td><strong>0</strong></td>
+<td></td>
+</tr>
+<tr>
+<td>41</td>
+<td>Closing</td>
+<td>TEXT_NUMBER</td>
+<td><strong>0</strong></td>
+<td></td>
+</tr>
+<tr>
+<td>42</td>
+<td>Report Closing</td>
+<td>TEXT_NUMBER</td>
+<td><strong>0</strong></td>
+<td></td>
+</tr>
+<tr>
+<td>43</td>
+<td>Team Template</td>
+<td>PICKLIST</td>
+<td>~30</td>
+<td><code>Default</code> ngoài option</td>
+</tr>
+</tbody></table></div>
+<h2 id="sec-pl-b" class="h-anchored"><span class="h-num">PL B</span><a class="h-link" href="#sec-pl-b">17 cột PIM export, fill-rate trên 390 dòng app</a></h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Cột</th>
+<th>Fill</th>
+<th>Cấp</th>
+<th>Ghi chú</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0</td>
+<td>alias</td>
+<td>390</td>
+<td>product</td>
+<td>272 giá trị phân biệt, lưu dạng <code>&quot;100.0&quot;</code></td>
+</tr>
+<tr>
+<td>1</td>
+<td>app</td>
+<td>390</td>
+<td>app</td>
+<td>390 phân biệt</td>
+</tr>
+<tr>
+<td>2</td>
+<td>product_code</td>
+<td>390</td>
+<td>product</td>
+<td>272 phân biệt</td>
+</tr>
+<tr>
+<td>3</td>
+<td>app_platform</td>
+<td>390</td>
+<td>app</td>
+<td>Đúng 2: android, ios</td>
+</tr>
+<tr>
+<td>4</td>
+<td>app_id</td>
+<td>309</td>
+<td>app</td>
+<td>Tie-breaker định danh</td>
+</tr>
+<tr>
+<td>5</td>
+<td>package_name</td>
+<td>330</td>
+<td>app</td>
+<td>Tie-breaker định danh</td>
+</tr>
+<tr>
+<td>6</td>
+<td>product_name</td>
+<td>389</td>
+<td>product</td>
+<td>271 phân biệt</td>
+</tr>
+<tr>
+<td>7</td>
+<td>stage</td>
+<td>390</td>
+<td><strong>app</strong></td>
+<td>7 giá trị</td>
+</tr>
+<tr>
+<td>8</td>
+<td>icon</td>
+<td>243</td>
+<td>app</td>
+<td>URL</td>
+</tr>
+<tr>
+<td>9</td>
+<td>genre</td>
+<td>138</td>
+<td>product</td>
+<td>27 giá trị ghép kiểu store</td>
+</tr>
+<tr>
+<td>10</td>
+<td>store_url</td>
+<td>200</td>
+<td>app</td>
+<td></td>
+</tr>
+<tr>
+<td>11</td>
+<td>kick_off_date</td>
+<td>359</td>
+<td>app</td>
+<td>Serial Excel, cần convert</td>
+</tr>
+<tr>
+<td>12</td>
+<td>finished_protype_date</td>
+<td>110</td>
+<td>app</td>
+<td>Lỗi chính tả ở nguồn</td>
+</tr>
+<tr>
+<td>13</td>
+<td>created_by</td>
+<td>282</td>
+<td>product</td>
+<td><strong>Không phải PM</strong> · có <code>system@</code></td>
+</tr>
+<tr>
+<td>14</td>
+<td>last_updated</td>
+<td>390</td>
+<td>app</td>
+<td><strong>Không dùng tie-break</strong> — trùng timestamp theo batch</td>
+</tr>
+<tr>
+<td>15</td>
+<td>product_group</td>
+<td>390</td>
+<td>product</td>
+<td>11 giá trị</td>
+</tr>
+<tr>
+<td>16</td>
+<td>product_team</td>
+<td>390</td>
+<td>product</td>
+<td>23 giá trị · rác <code>&quot;0.375&quot;</code></td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="sec-pl-c" class="h-anchored"><span class="h-num">PL C</span><a class="h-link" href="#sec-pl-c">Diagram cũ: cái nào dùng lại, cái nào sửa, cái nào loại</a></h2>
+<p>Nguồn: <code>docs/superpowers/research/2026-07-15-sync-architecture-diagrams.md</code> (15 diagram, viết 2026-07-15 khi phạm vi còn là &quot;đồng bộ Smartsheet ⇄ NocoDB tổng quát&quot;, chưa có PIM và chưa probe sheet thật).</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Diagram cũ</th>
+<th>Xử lý trong v3.0</th>
+<th>Lý do</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Hub table ERD</td>
+<td>❌ <strong>Loại, vẽ lại từ đầu</strong> (§4.2 + §5.6)</td>
+<td><strong>Ba lỗi:</strong> (1) vẽ <code>Groups</code> là <strong>cha của</strong> <code>Teams</code> (quan hệ 1-n) — sai, 5/23 team thuộc nhiều group; (2) <code>product_group</code> là lookup 2 cấp <code>Products → Teams → Groups</code> — sai cùng lý do, derive sẽ ra group sai cho <code>PD103</code>; (3) đánh <code>product_code</code> là <strong>UK</strong> — sai, nó lệch 16/92 và không thể làm khoá. Ngoài ra thiếu hẳn <code>Apps</code> và toàn bộ phía PIM</td>
+</tr>
+<tr>
+<td>§1 Bức tranh toàn cảnh</td>
+<td><span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> <strong>Dùng lại có sửa</strong> → §4.1</td>
+<td>Chỉ có hai hệ; phải thêm PIM và 60 sheet vệ tinh. Giữ nguyên ý hay: bất đối xứng REST-có-limit vs internal-service-không-limit</td>
+</tr>
+<tr>
+<td>§2 Engine trong fork</td>
+<td><span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> <strong>Dùng lại có sửa</strong> → §7.1</td>
+<td>Đổi <code>ss-sync</code> → <code>hub-sync</code>; bỏ <code>hierarchyReplay</code> và <code>predecessorSync</code>; thêm <code>connectors/</code> cho hai nguồn và <code>matcher.ts</code></td>
+</tr>
+<tr>
+<td>§3 Luồng SS → NC</td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> <strong>Dùng lại gần như nguyên</strong> → §7.3</td>
+<td>Thêm nhánh <code>dead_letter</code> khi không match được alias, và nhánh <code>drift_report</code></td>
+</tr>
+<tr>
+<td>§4 Luồng NC → SS</td>
+<td><span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> <strong>Dùng lại có sửa</strong> → §7.4</td>
+<td>Thêm bước loại field theo <code>col_map</code> (locked / formula / hệ thống / thiếu option) — thiết kế cũ chưa biết hai cột bị lock</td>
+</tr>
+<tr>
+<td>§5 Chống echo-loop</td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> <strong>Dùng lại</strong> → §7.6</td>
+<td>Thêm khối bốn tác nhân tự động đã phát hiện qua cột <code>Submitter</code></td>
+</tr>
+<tr>
+<td>§6 Webhook lifecycle</td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> <strong>Dùng lại nguyên</strong> → §7.4</td>
+<td>Là hành vi API của Smartsheet, không phụ thuộc mô hình dữ liệu. Bổ sung nhận định: với quyền EDITOR thì <code>DISABLED_SCOPE_INACCESSIBLE</code> là rủi ro thật</td>
+</tr>
+<tr>
+<td>§7 State store ERD</td>
+<td><span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> <strong>Dùng lại có sửa lớn</strong> → §7.2</td>
+<td>Đổi schema <code>nc_ss_sync</code> → <code>hub_sync</code>; thêm <code>sync_source</code>, <code>drift_report</code>, <code>outbox</code>; <strong>đổi <code>disc_map</code> → <code>value_map</code></strong> vì tên <code>disc_map</code> bị dùng cho hai nghĩa; bỏ <code>att_map</code> và quan hệ parent self-link</td>
+</tr>
+<tr>
+<td>§8 Mapping kiểu cột</td>
+<td><span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> <strong>Thu gọn theo sheet thật</strong> → §5.7</td>
+<td>Bản cũ vẽ toàn bộ kiểu Smartsheet. Sheet này <strong>không có</strong> <code>PREDECESSOR</code>, <code>DURATION</code>, <code>ABSTRACT_DATETIME</code>, <code>CHECKBOX</code> ⇒ phạm vi <code>irConverter</code> nhỏ hơn nhiều</td>
+</tr>
+<tr>
+<td>§9 Hierarchy replay</td>
+<td>❌ <strong>Loại</strong></td>
+<td>Sheet Product Intake là bảng phẳng, 1 dòng = 1 product. Giữ lại hai quy tắc con dưới dạng ràng buộc C-06 (rowId cấp lại khi move/copy) và ghi chú cascade khi xoá dòng cha</td>
+</tr>
+<tr>
+<td>§10 Predecessor 3 lớp</td>
+<td>❌ <strong>Loại</strong></td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> Sheet <strong>không bật dependencies</strong> (không có cột <code>PREDECESSOR</code>, <code>Project Duration</code> là TEXT_NUMBER). Toàn bộ lớp này không cần cho phase hiện tại</td>
+</tr>
+<tr>
+<td>§11 Conflict resolution</td>
+<td>❌ <strong>Loại, viết lại</strong> → §6.2</td>
+<td>Bản cũ dùng <strong>LWW, Smartsheet thắng khi hoà</strong>. Bỏ vì: tie-break bằng timestamp không dùng được (PIM ghi hai dòng platform cùng batch, timestamp bằng nhau), và LWW sẽ tự động phá 10 dòng ở nhóm E. Thay bằng quy tắc dựa trên nội dung ô đích + <code>drift_report</code></td>
+</tr>
+<tr>
+<td>§12 Initial import pipeline</td>
+<td><span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> <strong>Dùng lại có sửa</strong> → §11.1</td>
+<td>Thêm pha import PIM; thêm <strong>hai pha con người</strong> (drift review + dọn dữ liệu); bỏ pha attachment và discussion</td>
+</tr>
+<tr>
+<td>§13 Direction state machine</td>
+<td><span class="chip chip-ok" title="đã verify trên dữ liệu thật">✅</span> <strong>Dùng lại</strong> → §11.2</td>
+<td>Đổi tên trạng thái cho khớp <code>sync_pair.direction</code>; bổ sung đề xuất pilot dừng ở <code>source_primary</code></td>
+</tr>
+<tr>
+<td>§14 Deployment view</td>
+<td><span class="chip chip-warn" title="giả định, chưa xác nhận">⚠️</span> <strong>Dùng lại có sửa</strong> → §7.7</td>
+<td>Đổi tên schema; thêm đường ra PIM; thêm cảnh báo <code>NODE_TLS_REJECT_UNAUTHORIZED=0</code> (D-12)</td>
+</tr>
+<tr>
+<td>§15 Rate budget</td>
+<td>❌ <strong>Loại khỏi phase này</strong></td>
+<td>Ba lane (main / attachment / history) là thiết kế cho sheet 20k dòng. Sheet hiện tại 105 dòng, không đồng bộ attachment cũng không đọc cell history ⇒ chỉ cần tôn trọng 300 req/phút. Giữ lại làm tài liệu tham khảo cho phase mở rộng</td>
+</tr>
+</tbody></table></div>
+<p><strong>Cách dùng hai tài liệu:</strong> khi có mâu thuẫn, <strong>v3.0 là chuẩn</strong> cho phạm vi Product/PD###, vì nó dựng từ probe thật. File diagram 2026-07-15 vẫn giữ giá trị cho các ràng buộc tổng quát của Smartsheet API (§6, §9, §15) sẽ cần lại khi mở rộng sang sheet có hierarchy hoặc dependency.</p>
+
+  </article>
+</div>
+
+<footer class="foot">
+  <p>
+    Sinh tự động từ <code>docs/prd/PJ185_Technical_Design_v3.0.md</code>. Sơ đồ vẽ bằng
+    Mermaid, luôn hiển thị trên nền sáng để đọc được ở cả hai chế độ màu; nếu tải Mermaid
+    thất bại, phần sơ đồ sẽ hiện nguyên văn mã nguồn thay vì hình.
+  </p>
+</footer>
+
+<script>
+// Theme toggle — remembers the choice, defaults to the OS setting.
+(function () {
+  var root = document.documentElement;
+  var key = 'pj185-theme';
+  try {
+    var saved = localStorage.getItem(key);
+    if (saved) root.setAttribute('data-theme', saved);
+  } catch (e) {}
+  var btn = document.getElementById('themeToggle');
+  btn.addEventListener('click', function () {
+    var current = root.getAttribute('data-theme');
+    if (!current) {
+      current = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    var next = current === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem(key, next); } catch (e) {}
+  });
+})();
+
+// Scroll-spy: highlight the section currently under the reader.
+(function () {
+  var items = Array.prototype.slice.call(document.querySelectorAll('.toc-item'));
+  if (!items.length || !('IntersectionObserver' in window)) return;
+  var byId = {};
+  var targets = [];
+  items.forEach(function (a) {
+    var id = a.getAttribute('href').slice(1);
+    var el = document.getElementById(id);
+    if (el) { byId[id] = a; targets.push(el); }
+  });
+  var active = null;
+  function setActive(a) {
+    if (active === a) return;
+    if (active) active.classList.remove('is-active');
+    active = a;
+    if (!a) return;
+    a.classList.add('is-active');
+    var rail = document.querySelector('.toc-inner') || document.querySelector('.toc');
+    if (rail && rail.scrollHeight > rail.clientHeight) {
+      var top = a.offsetTop - rail.clientHeight / 2;
+      rail.scrollTo({ top: top, behavior: 'auto' });
+    }
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (e.isIntersecting) setActive(byId[e.target.id]);
+    });
+  }, { rootMargin: '-12% 0px -78% 0px', threshold: 0 });
+  targets.forEach(function (t) { io.observe(t); });
+})();
+</script>
+
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs';
+
+const light = {
+  background: '#ffffff',
+  primaryColor: '#eaf1ff',
+  primaryBorderColor: '#2f6df6',
+  primaryTextColor: '#131822',
+  lineColor: '#6f7b91',
+  secondaryColor: '#f4f6f9',
+  tertiaryColor: '#fafbfd',
+  fontFamily: 'Inter, -apple-system, "Segoe UI", Roboto, sans-serif',
+  fontSize: '14px',
+};
+
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'base',
+  themeVariables: light,
+  securityLevel: 'strict',
+  maxTextSize: 200000,
+  er: { useMaxWidth: true, entityPadding: 12 },
+  flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+  sequence: { useMaxWidth: true, wrap: true },
+});
+
+try {
+  await mermaid.run({ querySelector: 'pre.mermaid' });
+} catch (err) {
+  console.error('mermaid render failed', err);
+}
+</script>
+
+</body>
+</html>
