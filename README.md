@@ -12,12 +12,16 @@ Bản đọc web của `docs/prd/PJ185_Technical_Design_*.md` trong fork
 |---|---|---|---|
 | [`/`](https://tainhathena.github.io/pj185-technical-design/) hoặc [`/v3-1.html`](https://tainhathena.github.io/pj185-technical-design/v3-1.html) | **v3.1** | 2026-07-31 | **mới nhất** — 43 mục, 29 bảng, 14 sơ đồ |
 | [`/v3.html`](https://tainhathena.github.io/pj185-technical-design/v3.html) | v3.0 | 2026-07-29 | đã thay thế — thiếu kết quả pull 31-07 (D-01, luật N6, 2 số đếm sai) |
-| [`/v2.html`](https://tainhathena.github.io/pj185-technical-design/v2.html) | v2.0 | 2026-07-29 | đã thay thế — ERD có 3 lỗi mô hình |
-| [`/v1.html`](https://tainhathena.github.io/pj185-technical-design/v1.html) | v1.0 | 2026-07-27 | đã thay thế — số liệu sai do export PIM bị cắt |
 
 `/` luôn trỏ bản mới nhất; mỗi bản còn giữ URL cố định `vN.html` để trích dẫn
-được một bản cụ thể. Bản cũ vẫn công khai để tra lịch sử quyết định, và mỗi
-trang cũ mở đầu bằng một banner nói rõ nó sai ở đâu.
+được một bản cụ thể. Trang cũ mở đầu bằng một banner nói rõ nó sai ở đâu.
+
+**v1.0 và v2.0 đã bỏ khỏi site** (2026-07-31) — hai bản đó sai mô hình dữ liệu
+ở mức không nên để người ngoài đọc: v1.0 tính số trên export PIM bị cắt còn
+145/390 dòng, v2.0 vẽ ERD với `Groups` là cha của `Teams` và `product_code` là
+khoá duy nhất. Chỉ giữ v3.0 vì bản nháp đó đang lưu hành chờ ký. Markdown gốc
+của v1.0/v2.0 vẫn nằm trong `docs/prd/` của repo `nocodb-smartsheet` nếu cần
+tra lịch sử; muốn xuất bản lại thì thêm mục vào `versions.json` là đủ.
 
 ## Lưu ý khi đọc
 
