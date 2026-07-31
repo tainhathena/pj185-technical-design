@@ -10,7 +10,8 @@ Bản đọc web của `docs/prd/PJ185_Technical_Design_*.md` trong fork
 
 | Trang | Bản | Ngày | Trạng thái |
 |---|---|---|---|
-| [`/`](https://tainhathena.github.io/pj185-technical-design/) hoặc [`/v3.html`](https://tainhathena.github.io/pj185-technical-design/v3.html) | **v3.0** | 2026-07-29 | mới nhất — 42 mục, 24 bảng, **14 sơ đồ** |
+| [`/`](https://tainhathena.github.io/pj185-technical-design/) hoặc [`/v3-1.html`](https://tainhathena.github.io/pj185-technical-design/v3-1.html) | **v3.1** | 2026-07-31 | **mới nhất** — 43 mục, 29 bảng, 14 sơ đồ |
+| [`/v3.html`](https://tainhathena.github.io/pj185-technical-design/v3.html) | v3.0 | 2026-07-29 | đã thay thế — thiếu kết quả pull 31-07 (D-01, luật N6, 2 số đếm sai) |
 | [`/v2.html`](https://tainhathena.github.io/pj185-technical-design/v2.html) | v2.0 | 2026-07-29 | đã thay thế — ERD có 3 lỗi mô hình |
 | [`/v1.html`](https://tainhathena.github.io/pj185-technical-design/v1.html) | v1.0 | 2026-07-27 | đã thay thế — số liệu sai do export PIM bị cắt |
 
